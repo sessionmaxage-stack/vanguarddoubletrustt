@@ -8,10 +8,19 @@ const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 const cloudinary = require("cloudinary").v2;
 
-const { getAuth, getFirestore } = require("./firebase");
+const { getAuth, getFirestore, validateFirebaseConfig } = require("./firebase");
 const { getCookieName, getCookieOptions, getSessionExpiresInMs, requireAuth } = require("./auth");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+
+(function initFirebasePreCheck() {
+  try {
+    const configReport = validateFirebaseConfig();
+    console.log(`[Firebase] Service account pre-initialization check PASSED (Source: ${configReport.source}, Project: ${configReport.projectId}, Client: ${configReport.clientEmail})`);
+  } catch (err) {
+    console.error(`[Firebase] FATAL: Service account pre-initialization check FAILED:`, err.message);
+  }
+})();
 
 (function initCloudinary() {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "";
