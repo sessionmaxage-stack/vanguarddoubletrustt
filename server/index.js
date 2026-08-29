@@ -93,7 +93,8 @@ app.use(
     contentSecurityPolicy: false
   })
 );
-app.use(express.json({ limit: "200kb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
 const siteRoot = path.resolve(__dirname, "..");
@@ -101,12 +102,14 @@ const siteRoot = path.resolve(__dirname, "..");
 const localAdminDataDir = path.join(__dirname, "data");
 const localAdminUsersFile = path.join(localAdminDataDir, "admin_users.json");
 const localAdminTransactionsFile = path.join(localAdminDataDir, "admin_transactions.json");
+const localUploadsDir = path.join(siteRoot, "uploads", "profiles");
 
 (function ensureLocalDataDir() {
   try {
     if (!fs.existsSync(localAdminDataDir)) fs.mkdirSync(localAdminDataDir, { recursive: true });
     if (!fs.existsSync(localAdminUsersFile)) fs.writeFileSync(localAdminUsersFile, JSON.stringify({}, null, 2), "utf8");
     if (!fs.existsSync(localAdminTransactionsFile)) fs.writeFileSync(localAdminTransactionsFile, JSON.stringify({}, null, 2), "utf8");
+    if (!fs.existsSync(localUploadsDir)) fs.mkdirSync(localUploadsDir, { recursive: true });
   } catch (e) {
     if (process.env.NODE_ENV !== "production") {
       console.warn("[VT] Local admin data init skipped:", e && e.message ? String(e.message) : e);
@@ -1733,6 +1736,163 @@ app.get("/api/admin/transactions", requireAdminAuth, async (req, res) => {
   } catch (e) {
     const normalized = normalizeFirebaseAdminError(e, "Unable to load transactions.");
     res.status(normalized.status).json({ error: normalized.error });
+  }
+});
+
+function detectImageFormatFromBuffer(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return { format: "jpeg", ext: "jpg", mime: "image/jpeg" };
+  }
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0d &&
+    buf[5] === 0x0a &&
+    buf[6] === 0x1a &&
+    buf[7] === 0x0a
+  ) {
+    return { format: "png", ext: "png", mime: "image/png" };
+  }
+  // GIF: GIF87a or GIF89a
+  if (
+    buf[0] === 0x47 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x38 &&
+    (buf[4] === 0x37 || buf[4] === 0x39) &&
+    buf[5] === 0x61
+  ) {
+    return { format: "gif", ext: "gif", mime: "image/gif" };
+  }
+  // WebP: RIFF .... WEBP
+  if (
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46 &&
+    buf[8] === 0x57 &&
+    buf[9] === 0x45 &&
+    buf[10] === 0x42 &&
+    buf[11] === 0x50
+  ) {
+    return { format: "webp", ext: "webp", mime: "image/webp" };
+  }
+  return null;
+}
+
+function scanBufferForMalware(buf) {
+  if (buf.length >= 2 && buf[0] === 0x4d && buf[1] === 0x5a) {
+    return { safe: false, reason: "Executable PE/DOS binary detected" };
+  }
+  if (buf.length >= 4 && buf[0] === 0x7f && buf[1] === 0x45 && buf[2] === 0x4c && buf[3] === 0x46) {
+    return { safe: false, reason: "Executable ELF binary detected" };
+  }
+  const sample = buf.subarray(0, Math.min(buf.length, 4096)).toString("latin1") +
+                 buf.subarray(Math.max(0, buf.length - 4096)).toString("latin1");
+  if (/<\?php|<\?=|<\?|<%|\b(system|exec|passthru|shell_exec)\s*\(/i.test(sample)) {
+    return { safe: false, reason: "Embedded script tags detected in file payload" };
+  }
+  return { safe: true };
+}
+
+app.post("/api/admin/upload-profile-pic", requireAdminAuth, async (req, res) => {
+  try {
+    const rawDataUrl = String(req.body?.fileDataUrl || req.body?.fileBase64 || "").trim();
+    const originalFileName = String(req.body?.fileName || "profile.jpg").trim();
+
+    if (!rawDataUrl) {
+      res.status(400).json({ error: "No image file provided." });
+      return;
+    }
+
+    let base64Data = rawDataUrl;
+    if (rawDataUrl.includes(",")) {
+      base64Data = rawDataUrl.split(",")[1];
+    }
+
+    const fileBuffer = Buffer.from(base64Data, "base64");
+    if (!fileBuffer || fileBuffer.length === 0) {
+      res.status(400).json({ error: "Invalid or empty image file data." });
+      return;
+    }
+
+    // 5MB maximum file size limit
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (fileBuffer.length > MAX_FILE_SIZE) {
+      res.status(400).json({ error: "Image file size exceeds the strict 5MB limit. Please choose a smaller image." });
+      return;
+    }
+
+    // Magic bytes validation
+    const detected = detectImageFormatFromBuffer(fileBuffer);
+    if (!detected) {
+      res.status(400).json({ error: "Invalid file type. File header verification failed. Only valid JPG, PNG, GIF, and WebP images are allowed." });
+      return;
+    }
+
+    // Malware / safety check
+    const scan = scanBufferForMalware(fileBuffer);
+    if (!scan.safe) {
+      res.status(400).json({ error: "Security check failed: " + scan.reason });
+      return;
+    }
+
+    const uniqueId = "p_" + Date.now() + "_" + crypto.randomBytes(8).toString("hex");
+    let secureUrl = "";
+    let publicId = uniqueId;
+
+    // Check Cloudinary
+    if (CLOUDINARY_CLOUD_NAME && (process.env.CLOUDINARY_API_SECRET || CLOUDINARY_UPLOAD_PRESET)) {
+      try {
+        const uploadResult = await cloudinary.uploader.upload(
+          `data:${detected.mime};base64,${base64Data}`,
+          {
+            folder: CLOUDINARY_PROFILE_FOLDER,
+            public_id: uniqueId,
+            resource_type: "image",
+            format: detected.format
+          }
+        );
+        if (uploadResult && uploadResult.secure_url) {
+          secureUrl = uploadResult.secure_url;
+          publicId = uploadResult.public_id || uniqueId;
+        }
+      } catch (cErr) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[VT] Cloudinary admin upload error, using local secure storage:", cErr && cErr.message ? cErr.message : cErr);
+        }
+      }
+    }
+
+    // Fallback to local secure storage if Cloudinary not used or unavailable
+    if (!secureUrl) {
+      const localUploadsDir = path.join(siteRoot, "uploads", "profiles");
+      if (!fs.existsSync(localUploadsDir)) {
+        fs.mkdirSync(localUploadsDir, { recursive: true });
+      }
+      const localFileName = `${uniqueId}.${detected.ext}`;
+      const localFilePath = path.join(localUploadsDir, localFileName);
+      fs.writeFileSync(localFilePath, fileBuffer);
+      secureUrl = `/uploads/profiles/${localFileName}`;
+    }
+
+    res.status(200).json({
+      ok: true,
+      secure_url: secureUrl,
+      public_id: publicId,
+      format: detected.format,
+      bytes: fileBuffer.length
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[VT] Profile picture upload failed:", err);
+    }
+    res.status(500).json({ error: "Server error while processing profile picture upload." });
   }
 });
 

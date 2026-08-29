@@ -514,6 +514,199 @@
       };
     }
 
+    function resizeAndCompressImage(file, maxDimension = 500, quality = 0.85) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Unable to read selected image file."));
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => reject(new Error("Invalid or corrupt image file."));
+          img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDimension || height > maxDimension) {
+              if (width > height) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+              } else {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const outFormat = file.type === "image/png" ? "image/png" :
+                              file.type === "image/gif" ? "image/gif" :
+                              file.type === "image/webp" ? "image/webp" : "image/jpeg";
+            const dataUrl = canvas.toDataURL(outFormat, quality);
+            resolve({
+              dataUrl,
+              width,
+              height,
+              format: outFormat,
+              fileName: file.name,
+              fileSize: file.size
+            });
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function uploadAdminProfilePic(fileDataUrl, fileName) {
+      const res = await fetch("/api/admin/upload-profile-pic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ fileDataUrl, fileName })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(String(data?.error || "Failed to upload profile picture."));
+      }
+      return data;
+    }
+
+    function wireProfilePicUploader() {
+      const dropzone = document.getElementById("createProfilePicDropzone");
+      const fileInput = document.getElementById("createProfilePicFile");
+      const hiddenVal = document.getElementById("createProfilePic");
+      const promptWrap = document.getElementById("createProfilePicPrompt");
+      const previewWrap = document.getElementById("createProfilePicPreviewWrap");
+      const previewImg = document.getElementById("createProfilePicPreview");
+      const nameEl = document.getElementById("createProfilePicName");
+      const metaEl = document.getElementById("createProfilePicMeta");
+      const statusEl = document.getElementById("createProfilePicStatus");
+      const removeBtn = document.getElementById("createProfilePicRemoveBtn");
+      const errorEl = document.getElementById("createProfilePicError");
+
+      if (!dropzone || !fileInput) return;
+
+      function showError(msg) {
+        if (!errorEl) return;
+        if (msg) {
+          errorEl.textContent = msg;
+          errorEl.style.display = "block";
+        } else {
+          errorEl.textContent = "";
+          errorEl.style.display = "none";
+        }
+      }
+
+      function resetPicState() {
+        if (fileInput) fileInput.value = "";
+        if (hiddenVal) hiddenVal.value = "";
+        if (previewImg) previewImg.src = "";
+        if (nameEl) nameEl.textContent = "";
+        if (metaEl) metaEl.textContent = "";
+        if (statusEl) statusEl.textContent = "";
+        if (promptWrap) promptWrap.style.display = "block";
+        if (previewWrap) previewWrap.style.display = "none";
+        showError("");
+      }
+
+      async function processAndUploadFile(file) {
+        showError("");
+        if (!file) return;
+
+        // Validation 1: Size (Max 5MB)
+        const MAX_SIZE = 5 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+          showError(`File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the 5MB maximum limit.`);
+          return;
+        }
+
+        // Validation 2: Format
+        const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg"];
+        const ext = (file.name.split(".").pop() || "").toLowerCase();
+        const validExts = ["jpg", "jpeg", "png", "webp", "gif"];
+        if (!validTypes.includes(file.type) && !validExts.includes(ext)) {
+          showError("Invalid file format. Only JPG, PNG, WebP, and GIF images are allowed.");
+          return;
+        }
+
+        try {
+          if (statusEl) {
+            statusEl.textContent = "Optimizing image (500x500)...";
+            statusEl.style.color = "#93c5fd";
+          }
+          if (promptWrap) promptWrap.style.display = "none";
+          if (previewWrap) previewWrap.style.display = "flex";
+          if (nameEl) nameEl.textContent = file.name;
+          if (metaEl) metaEl.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+
+          // Step 1: Resize and compress to max 500x500
+          const processed = await resizeAndCompressImage(file, 500, 0.85);
+          if (previewImg) previewImg.src = processed.dataUrl;
+          if (metaEl) metaEl.textContent = `${processed.width}x${processed.height}px • ${(file.size / 1024).toFixed(1)} KB`;
+
+          // Step 2: Upload to server endpoint
+          if (statusEl) {
+            statusEl.textContent = "Uploading to secure storage...";
+            statusEl.style.color = "#93c5fd";
+          }
+          const uploadRes = await uploadAdminProfilePic(processed.dataUrl, file.name);
+          const finalUrl = uploadRes.secure_url || processed.dataUrl;
+          if (hiddenVal) hiddenVal.value = finalUrl;
+
+          if (statusEl) {
+            statusEl.textContent = "✓ Uploaded & Attached";
+            statusEl.style.color = "#34d399";
+          }
+        } catch (err) {
+          showError(err.message || "Failed to process and upload image.");
+          resetPicState();
+        }
+      }
+
+      dropzone.addEventListener("click", (e) => {
+        if (e.target === removeBtn || removeBtn?.contains(e.target)) return;
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (file) processAndUploadFile(file);
+      });
+
+      removeBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        resetPicState();
+      });
+
+      // Drag & Drop
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.style.borderColor = "#60a5fa";
+          dropzone.style.background = "rgba(30, 58, 138, 0.3)";
+        });
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.style.borderColor = "rgba(147,197,253,0.3)";
+          dropzone.style.background = "rgba(15,23,42,0.4)";
+        });
+      });
+
+      dropzone.addEventListener("drop", (e) => {
+        const dt = e.dataTransfer;
+        const file = dt && dt.files && dt.files[0];
+        if (file) processAndUploadFile(file);
+      });
+
+      window.__vtResetAdminPicUpload = resetPicState;
+    }
+
     function fillCreateForm(next) {
       if (next.firstname != null) document.getElementById("createFirstname").value = next.firstname;
       if (next.lastname != null) document.getElementById("createLastname").value = next.lastname;
@@ -533,7 +726,28 @@
       if (next.city != null) document.getElementById("createCity").value = next.city;
       if (next.state != null) document.getElementById("createState").value = next.state;
       if (next.zipCode != null) document.getElementById("createZipCode").value = next.zipCode;
-      if (next.profilePic != null) document.getElementById("createProfilePic").value = next.profilePic;
+      if (next.profilePic != null) {
+        document.getElementById("createProfilePic").value = next.profilePic;
+        if (!next.profilePic) {
+          if (typeof window.__vtResetAdminPicUpload === "function") {
+            window.__vtResetAdminPicUpload();
+          }
+        } else {
+          const previewWrap = document.getElementById("createProfilePicPreviewWrap");
+          const promptWrap = document.getElementById("createProfilePicPrompt");
+          const previewImg = document.getElementById("createProfilePicPreview");
+          const nameEl = document.getElementById("createProfilePicName");
+          const statusEl = document.getElementById("createProfilePicStatus");
+          if (previewImg) previewImg.src = next.profilePic;
+          if (nameEl) nameEl.textContent = "Attached Profile Picture";
+          if (statusEl) {
+            statusEl.textContent = "✓ Image Loaded";
+            statusEl.style.color = "#34d399";
+          }
+          if (promptWrap) promptWrap.style.display = "none";
+          if (previewWrap) previewWrap.style.display = "flex";
+        }
+      }
     }
 
     function renderCreatedInfo(data) {
@@ -591,6 +805,8 @@
         transferCode: cur.transferCode ? cur.transferCode : randomDigits(6)
       });
     });
+
+    wireProfilePicUploader();
 
     submitBtn?.addEventListener("click", async () => {
       flashCreate("");

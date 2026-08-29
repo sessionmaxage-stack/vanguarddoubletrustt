@@ -747,9 +747,30 @@
                 <input id="createZipCode" type="text" placeholder="10001" />
               </div>
               <div style="grid-column:1 / -1;">
-                <label style="display:block; margin:0 0 6px; font-size:12px; color:#93c5fd; font-weight:800">Profile Picture URL (optional)</label>
-                <input id="createProfilePic" type="text" placeholder="https://example.com/photo.jpg or Cloudinary URL" />
-                <div class="muted" style="font-size:11px; margin-top:4px">Paste a direct image URL. This will be saved as the customer's profile picture.</div>
+                <label style="display:block; margin:0 0 6px; font-size:12px; color:#93c5fd; font-weight:800">Profile Picture (optional)</label>
+                <input id="createProfilePic" type="hidden" value="" />
+                <input id="createProfilePicFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" />
+                
+                <div id="createProfilePicDropzone" style="border:2px dashed rgba(147,197,253,0.3); border-radius:12px; padding:18px 14px; text-align:center; background:rgba(15,23,42,0.4); cursor:pointer; transition:all 0.2s ease;">
+                  <div id="createProfilePicPrompt">
+                    <svg style="width:32px; height:32px; margin:0 auto 6px; color:#93c5fd; display:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <div style="font-size:13px; font-weight:700; color:#f8fafc; margin-bottom:2px">Drag &amp; drop profile picture here, or <span style="color:#60a5fa; text-decoration:underline">browse</span></div>
+                    <div class="muted" style="font-size:11px">Supports JPG, PNG, GIF, WebP (max 5MB, auto-optimized to 500x500)</div>
+                  </div>
+
+                  <div id="createProfilePicPreviewWrap" style="display:none; align-items:center; gap:12px; text-align:left;">
+                    <img id="createProfilePicPreview" src="" alt="Preview" style="width:56px; height:56px; border-radius:50%; object-fit:cover; border:2px solid #3b82f6; box-shadow:0 4px 12px rgba(0,0,0,0.3); flex-shrink:0;" />
+                    <div style="flex:1; min-width:0">
+                      <div id="createProfilePicName" style="font-size:13px; font-weight:700; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis"></div>
+                      <div id="createProfilePicMeta" class="muted" style="font-size:11px; margin-top:2px"></div>
+                      <div id="createProfilePicStatus" style="font-size:11px; color:#34d399; margin-top:2px; font-weight:600"></div>
+                    </div>
+                    <button type="button" id="createProfilePicRemoveBtn" class="btn-secondary" style="padding:6px 12px; font-size:12px; height:auto; margin:0">Remove</button>
+                  </div>
+                </div>
+                <div id="createProfilePicError" style="color:#f87171; font-size:12px; margin-top:6px; display:none;"></div>
               </div>
             </div>
           </div>

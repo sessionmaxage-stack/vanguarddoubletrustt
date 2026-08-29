@@ -55,7 +55,9 @@ function check(url, label) {
     ['Create Customer KYC City field', 'id="createCity"', true],
     ['Create Customer KYC State field', 'id="createState"', true],
     ['Create Customer KYC ZIP field', 'id="createZipCode"', true],
-    ['Create Customer Profile Picture URL field', 'id="createProfilePic"', true],
+    ['Create Customer Profile Picture value field', 'id="createProfilePic"', true],
+    ['Create Customer Profile Picture file input', 'id="createProfilePicFile"', true],
+    ['Create Customer Profile Picture dropzone', 'id="createProfilePicDropzone"', true],
     ['adminCreateModal still openable', 'id="adminCreateModal"', true],
   ]);
 

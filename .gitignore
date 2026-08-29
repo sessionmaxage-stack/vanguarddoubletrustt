@@ -9,3 +9,4 @@ server_stderr.log
 server_stdout.log
 *.log
 scratch/
+uploads/
