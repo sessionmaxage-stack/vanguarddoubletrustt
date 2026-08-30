@@ -2469,50 +2469,85 @@
             if (submitBtn) submitBtn.disabled = false;
             return;
           }
-          if (code.length < 6) {
-            setTransferMsg("error", "Please enter your transfer code.");
-            if (submitBtn) submitBtn.disabled = false;
-            return;
+
+          var requestBody = {
+            amount: amount,
+            memo: memo,
+            currency: (ctx && ctx.currency) ? ctx.currency : "USD"
+          };
+          if (type === "accountNumber") requestBody.toAccountNumber = value;
+          else requestBody.toEmail = value;
+
+          function doExecuteTransfer(otpCode) {
+            var bodyObj = Object.assign({}, requestBody, { otp: otpCode, transferCode: otpCode });
+            var originalText = submitBtn ? submitBtn.textContent : "Send";
+            if (submitBtn) submitBtn.textContent = "Sending…";
+            fetchJson("/api/customer/transfer", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(bodyObj)
+            })
+              .then(function (data) {
+                if (data && data.ok) {
+                  setTransferMsg("success", "Bank Transfer sent successfully. Reference " + (data.reference || "--"));
+                  toast("Bank Transfer completed successfully!", "success");
+                  var bal = document.getElementById("balanceAmount");
+                  if (bal && data && Number.isFinite(Number(data.newBalance))) {
+                    var c = (ctx && ctx.currency) ? ctx.currency : "USD";
+                    bal.textContent = fmtCurrency(Number(data.newBalance), c);
+                  }
+                  if (codeInput) codeInput.value = "";
+                  if (amtInput) amtInput.value = "";
+                  if (memoInput) memoInput.value = "";
+                  if (valInput) valInput.value = "";
+                  transferState.recipient = null;
+                  updateRecipientPreview();
+                } else {
+                  setTransferMsg("error", (data && data.error) ? String(data.error) : "Transfer failed.");
+                  toast((data && data.error) ? String(data.error) : "Transfer failed.", "error");
+                }
+              })
+              .catch(function (err) {
+                setTransferMsg("error", err && err.message ? String(err.message) : "Unable to complete transfer.");
+                toast(err && err.message ? String(err.message) : "Unable to complete transfer.", "error");
+              })
+              .finally(function () {
+                if (submitBtn) {
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = originalText;
+                }
+              });
           }
-          var bodyObj = { amount: amount, memo: memo, transferCode: code, currency: (ctx && ctx.currency) ? ctx.currency : "USD" };
-          if (type === "accountNumber") bodyObj.toAccountNumber = value;
-          else bodyObj.toEmail = value;
-          var originalText = submitBtn ? submitBtn.textContent : "Send";
-          if (submitBtn) submitBtn.textContent = "Sending…";
-          fetchJson("/api/customer/transfer", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bodyObj)
-          })
-            .then(function (data) {
-              if (data && data.ok) {
-                setTransferMsg("success", "Bank Transfer sent successfully. Reference " + (data.reference || "--"));
-                toast("Bank Transfer completed successfully!", "success");
-                var bal = document.getElementById("balanceAmount");
-                if (bal && data && Number.isFinite(Number(data.newBalance))) {
-                  var c = (ctx && ctx.currency) ? ctx.currency : "USD";
-                  bal.textContent = fmtCurrency(Number(data.newBalance), c);
+
+          if (code.length === 6 && /^\d{6}$/.test(code)) {
+            doExecuteTransfer(code);
+          } else {
+            fetchJson("/api/customer/transfer/request-otp", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestBody)
+            }).then(function(res) {
+              if (res && res.ok) {
+                toast(res.message || "Verification code sent to your registered email.", "info");
+                var promptVal = window.prompt("A 6-digit verification code has been sent to " + (res.maskedEmail || "your email") + " (valid for 15 mins).\nEnter the 6-digit code to authorize this transfer:");
+                if (promptVal && promptVal.trim().length === 6) {
+                  if (codeInput) codeInput.value = promptVal.trim();
+                  doExecuteTransfer(promptVal.trim());
+                } else {
+                  if (submitBtn) submitBtn.disabled = false;
                 }
-                var newBal = Number(data.newBalance);
-                var ref = String(data.reference || "");
-                var amtVal = Number(amount);
-                var curr = (ctx && ctx.currency) ? ctx.currency : "USD";
-                var acctHolder = transferState.recipient && transferState.recipient.data ? (transferState.recipient.data.fullName || transferState.recipient.data.name || "") : "";
-                var nowDate = new Date();
-                var dateStr = nowDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + ", " +
-                  nowDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-                var esc = function(s) { return String(s || "").replace(/[&<>"']/g, function(ch){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]; }); };
-                var fmtAmt = fmtCurrency(amtVal, curr);
-                var fmtBal = Number.isFinite(newBal) ? fmtCurrency(newBal, curr) : "";
-                var detailData = [
-                  { label: "Amount Debited", value: curr + " " + fmtAmt.replace(/^[^\d]*/, "") },
-                  { label: "Transaction reference:", value: ref || "--" },
-                  { label: "Account holder:", value: esc(acctHolder || "Recipient") },
-                  { label: "Date:", value: dateStr }
-                ];
-                if (Number.isFinite(newBal)) {
-                  detailData.push({ label: "Available Balance:", value: curr + " " + fmtBal.replace(/^[^\d]*/, "") });
-                }
+              } else {
+                setTransferMsg("error", (res && res.error) ? String(res.error) : "Unable to generate verification code.");
+                toast((res && res.error) ? String(res.error) : "Unable to generate verification code.", "error");
+                if (submitBtn) submitBtn.disabled = false;
+              }
+            }).catch(function(err) {
+              setTransferMsg("error", err && err.message ? String(err.message) : "Failed to send verification code.");
+              toast(err && err.message ? String(err.message) : "Failed to send verification code.", "error");
+              if (submitBtn) submitBtn.disabled = false;
+            });
+          }
+        }
                 setTimeout(function () {
                   closeTransferModal();
                   resetTransferModal();

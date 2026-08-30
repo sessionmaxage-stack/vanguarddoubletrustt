@@ -1112,51 +1112,85 @@
     return;
   }
 
-  const showTransferCodeDialog = async () => {
+  const showEmailOtpDialog = async (transferContext) => {
+    let otpResponse = null;
+    if (hasSwal()) {
+      window.Swal.fire({
+        title: "Sending Verification Code...",
+        text: "Please wait while we send a 6-digit OTP to your registered email address.",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          window.Swal.showLoading();
+        }
+      });
+    }
+
+    try {
+      const res = await fetch("/api/customer/transfer/request-otp", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          toAccountNumber: transferContext.toAccountNumber,
+          toEmail: transferContext.toEmail,
+          amount: transferContext.amount,
+          currency: transferContext.currency || "USD",
+          memo: transferContext.memo
+        })
+      });
+      otpResponse = await res.json();
+      if (!res.ok || !otpResponse.ok) {
+        throw new Error(otpResponse.error || "Failed to generate transfer verification code.");
+      }
+    } catch (err) {
+      if (hasSwal()) {
+        window.Swal.fire({
+          icon: "error",
+          title: "Transfer Authorization Error",
+          text: err.message || "Failed to send verification code. Please try again."
+        });
+      } else {
+        alert(err.message || "Failed to send verification code.");
+      }
+      return null;
+    }
+
+    const maskedEmail = otpResponse.maskedEmail || "your registered email";
+
     if (hasSwal()) {
       const result = await window.Swal.fire({
-        title: "Enter Transfer Code",
-        text: "Enter your transfer code to authorize this transfer.",
-        input: "password",
+        title: "Email Verification Code",
+        html: `A 6-digit One-Time Password (OTP) has been sent to <strong>${maskedEmail}</strong>.<br><small class="text-muted" style="display:block; margin-top:8px;">Code expires in 15 minutes. Enter the 6-digit code below to authorize this transfer.</small>`,
+        input: "text",
         inputAttributes: {
-          maxlength: 32,
-          autocomplete: "off",
-          autocapitalize: "off"
+          maxlength: "6",
+          inputmode: "numeric",
+          pattern: "[0-9]*",
+          autocomplete: "one-time-code",
+          autofocus: "autofocus",
+          style: "text-align: center; letter-spacing: 6px; font-size: 24px; font-weight: bold;"
         },
-        inputPlaceholder: "Transfer code",
+        inputPlaceholder: "• • • • • •",
         showCancelButton: true,
-        confirmButtonText: "Confirm Transfer",
+        confirmButtonText: "Authorize Transfer",
         cancelButtonText: "Cancel",
         allowOutsideClick: false,
         inputValidator: (value) => {
           const code = String(value || "").trim();
-
-          if (!code) {
-            return "Please enter your transfer code.";
-          }
-
+          if (!code) return "Please enter the 6-digit verification code.";
+          if (!/^\d{6}$/.test(code)) return "The verification code must be exactly 6 numeric digits.";
           return undefined;
         }
       });
 
-      if (!result.isConfirmed) {
-        return null;
-      }
-
+      if (!result.isConfirmed) return null;
       return String(result.value || "").trim();
     }
 
-    const code = window.prompt("Enter your transfer code to authorize this transfer:");
-
-    if (code === null) {
-      return null;
-    }
-
-    if (!String(code).trim()) {
-      toast("warning", "Transfer code is required.");
-      return null;
-    }
-
+    const code = window.prompt(`Enter the 6-digit verification code sent to ${maskedEmail} (valid for 15 mins):`);
+    if (code === null) return null;
     return String(code).trim();
   };
 
@@ -1209,18 +1243,24 @@
       }
 
       /*
-       * Ask for the transfer code only after the confirmation dialog.
+       * Trigger 6-digit email OTP generation and display verification prompt.
        */
-      const transferCode = await showTransferCodeDialog();
+      const otp = await showEmailOtpDialog({
+        toAccountNumber: recipient.accountNumber || accountNumber,
+        toEmail: recipient.email || "",
+        amount: amount,
+        currency: recipient.currency || "USD",
+        memo: `Bank transfer to ${recipient.fullName || receiverName}`
+      });
 
-      if (transferCode === null) {
+      if (otp === null) {
         return;
       }
 
       if (hasSwal()) {
         window.Swal.fire({
           title: "Processing transfer...",
-          text: "Please wait while we process your transfer.",
+          text: "Verifying code and processing transfer...",
           allowOutsideClick: false,
           allowEscapeKey: false,
           showConfirmButton: false,
@@ -1231,9 +1271,7 @@
       }
 
       /*
-       * IMPORTANT:
-       * The server is responsible for changing the balance.
-       * Do NOT update Firestore directly from this page.
+       * The server verifies the 6-digit encrypted OTP and updates the balance.
        */
       const response = await fetch("/api/customer/transfer", {
         method: "POST",
@@ -1247,7 +1285,8 @@
           toEmail: recipient.email || "",
           amount: amount,
           currency: recipient.currency || "USD",
-          transferCode: transferCode,
+          otp: otp,
+          transferCode: otp,
           memo: `Bank transfer to ${recipient.fullName || receiverName}`
         })
       });

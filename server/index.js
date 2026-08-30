@@ -10,6 +10,14 @@ const cloudinary = require("cloudinary").v2;
 
 const { getAuth, getFirestore, validateFirebaseConfig } = require("./firebase");
 const { getCookieName, getCookieOptions, getSessionExpiresInMs, requireAuth } = require("./auth");
+const {
+  generate6DigitOtp,
+  maskEmail,
+  encryptOtpRecord,
+  decryptAndVerifyOtp,
+  checkRateLimit,
+  sendTransferOtpEmail
+} = require("./transferOtp");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -1282,6 +1290,105 @@ app.get("/api/customer/lookup-account", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfilePic, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const b = req.body || {};
+    const toAccountNumber = String(b.toAccountNumber || b.to || "").trim();
+    const toEmail = String(b.toEmail || "").trim().toLowerCase();
+    const amountRaw = b.amount;
+    const amount = Number(amountRaw);
+    const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
+    const memo = String(b.memo || b.note || b.reference || "").trim();
+
+    // 1. Trigger condition validation: must be an explicit money transfer initiation
+    if (!toAccountNumber && !toEmail) {
+      res.status(400).json({ error: "Recipient accountNumber or email is required to initiate a transfer." });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ error: "Transfer amount must be a positive number." });
+      return;
+    }
+
+    const db = getFirestore();
+    const senderRef = db.collection("users").doc(String(uid));
+    const senderSnap = await senderRef.get();
+    if (!senderSnap.exists) {
+      res.status(404).json({ error: "Your account was not found." });
+      return;
+    }
+    const senderDoc = senderSnap.data() || {};
+    const senderAccount = senderDoc?.account || {};
+    const senderStatus = String(senderAccount?.status || "").toUpperCase();
+    if (senderStatus && senderStatus !== "ACTIVE") {
+      res.status(400).json({ error: `Your account status is ${senderStatus}. Transfers are not available.` });
+      return;
+    }
+
+    const currentBalance = Number(senderAccount?.balance || 0);
+    if (currentBalance < amount) {
+      res.status(400).json({
+        error: `Insufficient balance. Available: ${senderAccount?.currency || "USD"} ${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+      });
+      return;
+    }
+
+    // 2. Enforce 24-hour rate limiting
+    const security = senderDoc.security || {};
+    const rateLimitData = security.transferOtpRateLimit || {};
+    const rateCheck = checkRateLimit(rateLimitData);
+    if (!rateCheck.allowed) {
+      res.status(429).json({ error: rateCheck.error });
+      return;
+    }
+
+    // 3. Generate 6-digit OTP and encrypt at rest (AES-256-GCM, 15-minute expiration)
+    const rawOtp = generate6DigitOtp();
+    const encryptedRecord = encryptOtpRecord(rawOtp, {
+      amount,
+      currency,
+      toAccountNumber,
+      toEmail,
+      memo
+    });
+
+    // 4. Temporarily store encrypted OTP and update 24-hour rate limit history
+    await senderRef.set(
+      {
+        security: {
+          ...security,
+          transferOtp: encryptedRecord,
+          transferOtpRateLimit: {
+            requests: rateCheck.requests
+          }
+        }
+      },
+      { merge: true }
+    );
+
+    // 5. Send OTP to user's registered email
+    const senderEmail = senderDoc.email || req.user.email || "";
+    const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || senderEmail;
+    await sendTransferOtpEmail(senderEmail, senderName, rawOtp, {
+      amount,
+      currency,
+      recipient: toAccountNumber || toEmail
+    });
+
+    res.status(200).json({
+      ok: true,
+      message: "A 6-digit verification code has been sent to your registered email address.",
+      maskedEmail: maskEmail(senderEmail),
+      expiresAt: encryptedRecord.expiresAt,
+      remainingDailyRequests: rateCheck.remaining
+    });
+  } catch (e) {
+    const normalized = normalizeFirebaseAdminError(e, "Unable to send verification code.");
+    res.status(normalized.status).json({ error: normalized.error });
+  }
+});
+
 app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (req, res) => {
   const b = req.body || {};
   const uid = req.user.uid;
@@ -1291,7 +1398,7 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const amount = Number(amountRaw);
   const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
   const memo = String(b.memo || b.note || b.reference || "").trim();
-  const transferCode = String(b.transferCode || b.transferPin || "").trim();
+  const candidateOtp = String(b.otp || b.transferOtp || b.transferCode || b.code || "").trim();
 
   if (!toAccountNumber && !toEmail) {
     res.status(400).json({ error: "Recipient accountNumber or email is required." });
@@ -1301,26 +1408,28 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     res.status(400).json({ error: "Amount must be a positive number." });
     return;
   }
-  if (!isTransferCodeValid(transferCode)) {
-    res.status(400).json({ error: "Transfer code is required and must be 6 digits or 8+ chars with uppercase, number, and special character." });
+  if (!candidateOtp) {
+    res.status(400).json({ error: "6-digit email verification code (OTP) is required." });
     return;
   }
+
   const db = getFirestore();
-  const senderSnap = await db.collection("users").doc(String(uid)).get();
+  const senderRef = db.collection("users").doc(String(uid));
+  const senderSnap = await senderRef.get();
   if (!senderSnap.exists) {
     res.status(404).json({ error: "Your account was not found." });
     return;
   }
   const senderDoc = senderSnap.data() || {};
-  const senderStoredHash = senderDoc?.security?.transferPinHash || senderDoc?.security?.transferCodeHash || null;
-  if (!senderStoredHash) {
-    res.status(400).json({ error: "Transfer code is not configured for your account. Please contact support." });
+
+  // Two-step OTP verification: Exact decrypted match check + 15-minute expiration check
+  const storedOtpRecord = senderDoc?.security?.transferOtp;
+  const otpValidation = decryptAndVerifyOtp(storedOtpRecord, candidateOtp);
+  if (!otpValidation.valid) {
+    res.status(401).json({ error: otpValidation.error });
     return;
   }
-  if (String(sha256Hex(transferCode)) !== String(senderStoredHash)) {
-    res.status(401).json({ error: "Invalid transfer code." });
-    return;
-  }
+
   const senderAccount = senderDoc?.account || {};
   const senderStatus = String(senderAccount?.status || "").toUpperCase();
   if (senderStatus && senderStatus !== "ACTIVE") {
@@ -1369,18 +1478,31 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const senderAccountNumber = senderAccount?.accountNumber || "";
   const recipientAccountNumber = recipientAccount?.accountNumber || "";
   const batch = db.batch();
-  const senderRef = db.collection("users").doc(String(uid));
   const recRef = db.collection("users").doc(String(recipientUid));
+
+  // Deduct balance and immediately invalidate/wipe OTP to prevent replay
   batch.set(senderRef, {
     updatedAt: nowIsoStamp,
-    account: { balance: Number((currentBalance - amount).toFixed(2)) }
+    account: { balance: Number((currentBalance - amount).toFixed(2)) },
+    security: {
+      transferOtp: {
+        verified: true,
+        verifiedAt: Date.now(),
+        encryptedData: null,
+        iv: null,
+        authTag: null,
+        expiresAt: 0
+      }
+    }
   }, { merge: true });
+
   const recBalance = Number(recipientAccount?.balance || 0);
   batch.set(recRef, {
     updatedAt: nowIsoStamp,
     account: { balance: Number((recBalance + amount).toFixed(2)) }
   }, { merge: true });
   await batch.commit();
+
   const debitTx = await writeTransaction({
     uid: String(uid),
     type: "TRANSFER_OUT",
