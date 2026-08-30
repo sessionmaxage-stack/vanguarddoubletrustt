@@ -324,5 +324,454 @@
     "photoURL": "/uploads/profiles/p_1788113406923_3a8af30ebc786f3d.png",
     "photo": "/uploads/profiles/p_1788113406923_3a8af30ebc786f3d.png",
     "avatar": "/uploads/profiles/p_1788113406923_3a8af30ebc786f3d.png"
+  },
+  "Eq7CXiKi3FMTu1mXjUleMzkXnSJ2": {
+    "email": "avatar_test_1788118933361@vanguardtest.com",
+    "createdAt": "2026-08-30T19:42:19.474Z",
+    "updatedAt": "2026-08-30T19:42:19.474Z",
+    "profile": {
+      "email": "avatar_test_1788118933361@vanguardtest.com",
+      "firstname": "Eleanor",
+      "lastname": "Vance",
+      "preferredLanguage": "en",
+      "profilePic": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+      "photoURL": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+      "photo": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+      "avatar": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png"
+    },
+    "security": {
+      "accountPinHash": "05853cc8379476d8bb3d350625a3bc08b91214049be1847d4e5403cc44715e31",
+      "transferPinHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "twoFactorEnabled": true,
+      "profilePic": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+      "photoURL": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+      "photo": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+      "avatar": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png"
+    },
+    "account": {
+      "accountNumber": "9017888551",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:42:19.474Z",
+      "lastLogin": "2026-08-30T19:42:19.474Z",
+      "currency": "USD",
+      "balance": 25000
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "profilePic": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+    "photoURL": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+    "photo": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png",
+    "avatar": "/uploads/profiles/p_1788118933341_d94189d7a426b14b.png"
+  },
+  "QJPwPuXp7gUzR7DyMhKr5a1dQUS2": {
+    "email": "avatar_test_1788119035217@vanguardtest.com",
+    "createdAt": "2026-08-30T19:44:02.876Z",
+    "updatedAt": "2026-08-30T19:44:02.876Z",
+    "profile": {
+      "email": "avatar_test_1788119035217@vanguardtest.com",
+      "firstname": "Eleanor",
+      "lastname": "Vance",
+      "preferredLanguage": "en",
+      "profilePic": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+      "photoURL": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+      "photo": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+      "avatar": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png"
+    },
+    "security": {
+      "accountPinHash": "05853cc8379476d8bb3d350625a3bc08b91214049be1847d4e5403cc44715e31",
+      "transferPinHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "twoFactorEnabled": true,
+      "profilePic": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+      "photoURL": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+      "photo": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+      "avatar": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png"
+    },
+    "account": {
+      "accountNumber": "9911370132",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:44:02.876Z",
+      "lastLogin": "2026-08-30T19:44:02.876Z",
+      "currency": "USD",
+      "balance": 25000
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "profilePic": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+    "photoURL": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+    "photo": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png",
+    "avatar": "/uploads/profiles/p_1788119035125_2c3b1ed34aaa2c2a.png"
+  },
+  "SzPvKqc9ZlUfVKJHI82tnLDG5n02": {
+    "email": "avatar_test_1788119097300@vanguardtest.com",
+    "createdAt": "2026-08-30T19:45:00.593Z",
+    "updatedAt": "2026-08-30T19:45:00.593Z",
+    "profile": {
+      "email": "avatar_test_1788119097300@vanguardtest.com",
+      "firstname": "Eleanor",
+      "lastname": "Vance",
+      "preferredLanguage": "en",
+      "profilePic": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+      "photoURL": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+      "photo": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+      "avatar": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png"
+    },
+    "security": {
+      "accountPinHash": "05853cc8379476d8bb3d350625a3bc08b91214049be1847d4e5403cc44715e31",
+      "transferPinHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "twoFactorEnabled": true,
+      "profilePic": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+      "photoURL": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+      "photo": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+      "avatar": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png"
+    },
+    "account": {
+      "accountNumber": "7351311763",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:45:00.593Z",
+      "lastLogin": "2026-08-30T19:45:00.593Z",
+      "currency": "USD",
+      "balance": 25000
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "profilePic": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+    "photoURL": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+    "photo": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png",
+    "avatar": "/uploads/profiles/p_1788119097276_b94776b3aeee33e9.png"
+  },
+  "9D9empw7FVQYmnghv37M9syrZZ62": {
+    "email": "registered_customer_1788119155451@vanguardtest.com",
+    "createdAt": "2026-08-30T19:46:01.068Z",
+    "updatedAt": "2026-08-30T19:46:01.068Z",
+    "profile": {
+      "email": "registered_customer_1788119155451@vanguardtest.com",
+      "firstname": "Alexander",
+      "lastname": "Hamilton",
+      "phone": "+1 212-555-0199",
+      "country": "United States",
+      "preferredLanguage": "en",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:46:01.068Z",
+      "kycDoneAt": "2026-08-30T19:46:01.068Z",
+      "KYCDoneAt": "2026-08-30T19:46:01.068Z"
+    },
+    "security": {
+      "accountPinHash": "481f6cc0511143ccdd7e2d1b1b94faf0a700a8b49cd13922a70b5ae28acaa8c5",
+      "transferPinHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:46:01.068Z",
+      "kycDoneAt": "2026-08-30T19:46:01.068Z",
+      "KYCDoneAt": "2026-08-30T19:46:01.068Z"
+    },
+    "account": {
+      "accountNumber": "5986754512",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:46:01.068Z",
+      "lastLogin": "2026-08-30T19:46:01.068Z",
+      "currency": "USD",
+      "balance": 15000
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "kycCompleted": true,
+    "country": "United States",
+    "firstname": "Alexander",
+    "lastname": "Hamilton"
+  },
+  "FipmB54KJcUEI0beqaQf6mFLLTo1": {
+    "email": "french64838@example.com",
+    "createdAt": "2026-08-30T19:47:31.293Z",
+    "updatedAt": "2026-08-30T19:47:31.293Z",
+    "profile": {
+      "email": "french64838@example.com",
+      "firstname": "Jean",
+      "lastname": "Dupont64838",
+      "phone": "+33 6 12 34 56 78",
+      "country": "FR",
+      "preferredLanguage": "fr",
+      "dateOfBirth": "1988-03-15",
+      "gender": "male",
+      "nationality": "French",
+      "occupation": "Architect",
+      "address": "10 Rue de la Paix",
+      "city": "Paris",
+      "state": "Île-de-France",
+      "zipCode": "75001",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:47:31.293Z",
+      "kycDoneAt": "2026-08-30T19:47:31.293Z",
+      "KYCDoneAt": "2026-08-30T19:47:31.293Z"
+    },
+    "security": {
+      "accountPinHash": "c7e9988d0ac79f466bf33b7bc5a8e31ebad2fe1f6e17c78919f5717acce44230",
+      "transferPinHash": "481f6cc0511143ccdd7e2d1b1b94faf0a700a8b49cd13922a70b5ae28acaa8c5",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:47:31.293Z",
+      "kycDoneAt": "2026-08-30T19:47:31.293Z",
+      "KYCDoneAt": "2026-08-30T19:47:31.293Z"
+    },
+    "account": {
+      "accountNumber": "7146999391",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:47:31.293Z",
+      "lastLogin": "2026-08-30T19:47:31.293Z",
+      "currency": "USD",
+      "balance": 2500
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "fr",
+    "kycCompleted": true,
+    "country": "FR",
+    "firstname": "Jean",
+    "lastname": "Dupont64838"
+  },
+  "NPtoLopjYPSaSJoR5MKNi5BRkkF2": {
+    "email": "spanish64838@example.com",
+    "createdAt": "2026-08-30T19:47:56.959Z",
+    "updatedAt": "2026-08-30T19:47:56.959Z",
+    "profile": {
+      "email": "spanish64838@example.com",
+      "firstname": "Carlos",
+      "lastname": "Garcia64838",
+      "phone": "+34 600 123 456",
+      "country": "ES",
+      "preferredLanguage": "es",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:47:56.959Z",
+      "kycDoneAt": "2026-08-30T19:47:56.959Z",
+      "KYCDoneAt": "2026-08-30T19:47:56.959Z"
+    },
+    "security": {
+      "accountPinHash": "3d5e554a8268b0baf4ff9d81eb9b77d81e3c3834350caca50c3833da49c6134e",
+      "transferPinHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:47:56.959Z",
+      "kycDoneAt": "2026-08-30T19:47:56.959Z",
+      "KYCDoneAt": "2026-08-30T19:47:56.959Z"
+    },
+    "account": {
+      "accountNumber": "3602382980",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:47:56.959Z",
+      "lastLogin": "2026-08-30T19:47:56.959Z",
+      "currency": "USD",
+      "balance": 3000
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "es",
+    "kycCompleted": true,
+    "country": "ES",
+    "firstname": "Carlos",
+    "lastname": "Garcia64838"
+  },
+  "ewdYFk6CCuY5HxVkT1GPDnOxAJY2": {
+    "email": "sender61884@example.com",
+    "createdAt": "2026-08-30T19:50:20.404Z",
+    "updatedAt": "2026-08-30T19:50:20.404Z",
+    "profile": {
+      "email": "sender61884@example.com",
+      "firstname": "Sender",
+      "lastname": "User61884",
+      "phone": "+1 555 111 2222",
+      "country": "US",
+      "preferredLanguage": "en",
+      "dateOfBirth": "1990-01-01",
+      "gender": "male",
+      "nationality": "American",
+      "occupation": "Engineer",
+      "address": "123 Main St",
+      "city": "New York",
+      "state": "NY",
+      "zipCode": "10001",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:50:20.404Z",
+      "kycDoneAt": "2026-08-30T19:50:20.404Z",
+      "KYCDoneAt": "2026-08-30T19:50:20.404Z"
+    },
+    "security": {
+      "accountPinHash": "e0bc60c82713f64ef8a57c0c40d02ce24fd0141d5cc3086259c19b1e62a62bea",
+      "transferPinHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:50:20.404Z",
+      "kycDoneAt": "2026-08-30T19:50:20.404Z",
+      "KYCDoneAt": "2026-08-30T19:50:20.404Z"
+    },
+    "account": {
+      "accountNumber": "6642444220",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:50:20.404Z",
+      "lastLogin": "2026-08-30T19:50:20.404Z",
+      "currency": "USD",
+      "balance": 5000
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "kycCompleted": true,
+    "country": "US",
+    "firstname": "Sender",
+    "lastname": "User61884"
+  },
+  "WjDyCLpj2oOqnPhajOE3P3RaByA3": {
+    "email": "recipient61884@example.com",
+    "createdAt": "2026-08-30T19:50:25.860Z",
+    "updatedAt": "2026-08-30T19:50:25.860Z",
+    "profile": {
+      "email": "recipient61884@example.com",
+      "firstname": "Recipient",
+      "lastname": "User61884",
+      "phone": "+1 555 333 4444",
+      "country": "US",
+      "preferredLanguage": "en",
+      "dateOfBirth": "1995-05-05",
+      "gender": "female",
+      "nationality": "American",
+      "occupation": "Designer",
+      "address": "456 Oak St",
+      "city": "Boston",
+      "state": "MA",
+      "zipCode": "02101",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:50:25.860Z",
+      "kycDoneAt": "2026-08-30T19:50:25.860Z",
+      "KYCDoneAt": "2026-08-30T19:50:25.860Z"
+    },
+    "security": {
+      "accountPinHash": "48e6f958531e543731746fd0a4fcba173e2ae226d60eb19a5d021be3c29f7a3e",
+      "transferPinHash": "481f6cc0511143ccdd7e2d1b1b94faf0a700a8b49cd13922a70b5ae28acaa8c5",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T19:50:25.860Z",
+      "kycDoneAt": "2026-08-30T19:50:25.860Z",
+      "KYCDoneAt": "2026-08-30T19:50:25.860Z"
+    },
+    "account": {
+      "accountNumber": "9454017707",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T19:50:25.860Z",
+      "lastLogin": "2026-08-30T19:50:25.860Z",
+      "currency": "USD",
+      "balance": 100
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "kycCompleted": true,
+    "country": "US",
+    "firstname": "Recipient",
+    "lastname": "User61884"
+  },
+  "9N5QIq6BLvNuLgu3aH9yh6xxEu93": {
+    "email": "alice1652@example.com",
+    "createdAt": "2026-08-30T20:01:26.964Z",
+    "updatedAt": "2026-08-30T20:01:26.964Z",
+    "profile": {
+      "email": "alice1652@example.com",
+      "firstname": "Alice",
+      "lastname": "Uploaded1652",
+      "phone": "+1 555 987 6543",
+      "country": "CA",
+      "preferredLanguage": "en",
+      "dateOfBirth": "1992-08-20",
+      "gender": "female",
+      "nationality": "Canadian",
+      "occupation": "UX Designer",
+      "address": "100 Queen St W",
+      "city": "Toronto",
+      "state": "ON",
+      "zipCode": "M5H 2N2",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T20:01:26.964Z",
+      "kycDoneAt": "2026-08-30T20:01:26.964Z",
+      "KYCDoneAt": "2026-08-30T20:01:26.964Z",
+      "profilePic": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+      "photoURL": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+      "photo": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+      "avatar": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png"
+    },
+    "security": {
+      "accountPinHash": "2a8610aefdd0028c6bf074dd18721c0ef8bc43241cc7a653d7aedf2036bdf6b3",
+      "transferPinHash": "481f6cc0511143ccdd7e2d1b1b94faf0a700a8b49cd13922a70b5ae28acaa8c5",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-08-30T20:01:26.964Z",
+      "kycDoneAt": "2026-08-30T20:01:26.964Z",
+      "KYCDoneAt": "2026-08-30T20:01:26.964Z",
+      "profilePic": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+      "photoURL": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+      "photo": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+      "avatar": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png"
+    },
+    "account": {
+      "accountNumber": "9136368350",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-08-30T20:01:26.964Z",
+      "lastLogin": "2026-08-30T20:01:26.964Z",
+      "currency": "USD",
+      "balance": 2500
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "kycCompleted": true,
+    "country": "CA",
+    "firstname": "Alice",
+    "lastname": "Uploaded1652",
+    "profilePic": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+    "photoURL": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+    "photo": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png",
+    "avatar": "/uploads/profiles/p_1788120081002_6eeb853b62ea63a6.png"
   }
 }

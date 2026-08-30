@@ -384,6 +384,42 @@
     return parts.map((p) => p.slice(0, 1).toUpperCase()).join("");
   }
 
+  function getProfilePicFromMe(me) {
+    if (!me) return "";
+    const prof = me.profile || {};
+    const sec = me.security || {};
+    return String(
+      prof.profilePic || prof.photoURL || prof.photo || prof.avatar ||
+      me.profilePic || me.photoURL || me.photo || me.avatar ||
+      sec.profilePic || sec.photoURL || sec.photo || sec.avatar || ""
+    ).trim();
+  }
+
+  function renderAvatarElement(elOrId, picUrl, initials, name) {
+    const el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
+    if (!el) return;
+    const cleanPic = typeof picUrl === "string" ? picUrl.trim() : "";
+    const cleanInitials = typeof initials === "string" && initials.trim() ? initials.trim() : "VT";
+    const cleanName = typeof name === "string" && name.trim() ? escapeHtml(name.trim()) : "User";
+
+    if (cleanPic && cleanPic !== "null" && cleanPic !== "undefined") {
+      const safePic = escapeHtml(cleanPic);
+      el.innerHTML = `<img src="${safePic}" alt="${cleanName}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;" onerror="this.onerror=null;this.parentElement.textContent='${cleanInitials}';" />`;
+      el.style.background = "transparent";
+      el.style.padding = "0";
+      el.style.overflow = "hidden";
+    } else {
+      el.textContent = cleanInitials;
+      el.style.background = "";
+      el.style.padding = "";
+      el.style.overflow = "";
+      try {
+        const imgs = el.querySelectorAll ? el.querySelectorAll("img") : [];
+        for (let i = 0; i < imgs.length; i++) try { imgs[i].remove(); } catch (_) {}
+      } catch (_) {}
+    }
+  }
+
   function formatDate(d) {
     if (!d) return "";
     const date = d instanceof Date ? d : new Date(d);
@@ -577,7 +613,9 @@
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
       if (nameEl) nameEl.textContent = name;
-      if (initialsEl) initialsEl.textContent = initialsFromName(name);
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
+      if (initialsEl) renderAvatarElement(initialsEl, picUrl, initials, name);
       syncPinState();
     })();
   }
@@ -670,10 +708,12 @@
         ? `${me.profile.firstname} ${me?.profile?.lastname || ""}`.trim()
         : me?.email || me?.uid || "VanguardDoubleTrust";
       const liveBalance = balanceFromMe(me);
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("dashboardUserName", name);
       setText("dashboardUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
       setText("balanceAmount", formatMoney(liveBalance));
       setText("savingAccountValue", formatMoney(liveBalance));
       setText("portfolioValue", "$0.00");
@@ -713,10 +753,12 @@
       const firstname = me?.profile?.firstname || "";
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("profileUserName", name);
       setText("profileUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
 
       setText("accountHolder", name);
       setText("emailAddress", me?.email || "--");
@@ -1000,10 +1042,12 @@
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
       const acct = accountNumberFromMe(me);
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("statementUserName", name);
       setText("statementUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
 
       setText("stAccountHolder", name);
       setText("stAccountNumber", maskAccountNumber(acct) || "--");
@@ -1498,10 +1542,12 @@
       const firstname = me?.profile?.firstname || "";
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "Customer";
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("internationalUserName", name);
       setText("internationalUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
       setText("helloLine", `Dear ${name}`);
 
       if (balEl) balEl.textContent = formatMoney(balanceFromMe(me));
@@ -1687,10 +1733,12 @@
       const firstname = me?.profile?.firstname || "";
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("transferHistoryUserName", name);
       setText("transferHistoryUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
 
       render();
     })();
@@ -1797,10 +1845,12 @@
       const firstname = me?.profile?.firstname || "";
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("cardUserName", name);
       setText("cardUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
 
       state.card = seedCardIfMissing(name);
       render();
@@ -1972,10 +2022,12 @@
       const firstname = me?.profile?.firstname || "";
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("pinUserName", name);
       setText("pinUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
 
       if (!window.localStorage.getItem(pinHashKey())) {
         try {
@@ -2151,10 +2203,12 @@
       const firstname = me?.profile?.firstname || "";
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("passwordUserName", name);
       setText("passwordUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
 
       if (!window.localStorage.getItem(passwordHashKey())) {
         try {
@@ -2444,10 +2498,12 @@
       const firstname = me?.profile?.firstname || "";
       const lastname = me?.profile?.lastname || "";
       const name = firstname || lastname ? `${firstname} ${lastname}`.trim() : me?.email || me?.uid || "VanguardDoubleTrust";
+      const picUrl = getProfilePicFromMe(me);
+      const initials = initialsFromName(name);
 
       setText("stocksUserName", name);
       setText("stocksUserEmail", me?.email || "");
-      setText("avatarInitials", initialsFromName(name));
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
 
       rerenderChart();
       renderMarket();
@@ -2563,6 +2619,11 @@
       if (typeof window.__vtApplyI18n === "function") {
         window.__vtApplyI18n(lang);
       }
+    } catch (_) {}
+    try {
+      const name = prof.firstname ? `${prof.firstname} ${prof.lastname || ""}`.trim() : me.email || "Customer";
+      const initials = initialsFromName(name);
+      renderAvatarElement("avatarInitials", picUrl, initials, name);
     } catch (_) {}
     if (after) {
       try { after(ctx); } catch (e) { if (window.console) console.error("[VT] bootstrapCustomerPage after() failed:", e); }

@@ -2054,14 +2054,28 @@
             if (first) initials += first.charAt(0).toUpperCase();
             if (last) initials += last.charAt(0).toUpperCase();
             if (!initials) initials = "VT";
-            avatarEl.textContent = initials;
-            avatarEl.style.background = "";
-            avatarEl.style.color = "";
-            avatarEl.style.padding = "";
-            try {
-              var imgs = avatarEl.querySelectorAll ? avatarEl.querySelectorAll("img") : [];
-              for (var i = 0; i < imgs.length; i++) try { imgs[i].remove(); } catch (_) {}
-            } catch (_) {}
+            var sec = (me && me.security) ? me.security : {};
+            var picUrl = String(
+              prof.profilePic || prof.photoURL || prof.photo || prof.avatar ||
+              (me && (me.profilePic || me.photoURL || me.photo || me.avatar)) ||
+              sec.profilePic || sec.photoURL || ""
+            ).trim();
+            if (picUrl && picUrl !== "null" && picUrl !== "undefined") {
+              avatarEl.innerHTML = '<img src="' + picUrl + '" alt="' + fullName + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;" onerror="this.onerror=null;this.parentElement.textContent=\'' + initials + '\';" />';
+              avatarEl.style.background = "transparent";
+              avatarEl.style.padding = "0";
+              avatarEl.style.overflow = "hidden";
+            } else {
+              avatarEl.textContent = initials;
+              avatarEl.style.background = "";
+              avatarEl.style.color = "";
+              avatarEl.style.padding = "";
+              avatarEl.style.overflow = "";
+              try {
+                var imgs = avatarEl.querySelectorAll ? avatarEl.querySelectorAll("img") : [];
+                for (var i = 0; i < imgs.length; i++) try { imgs[i].remove(); } catch (_) {}
+              } catch (_) {}
+            }
           }
           var account = (me && me.account) ? me.account : {};
           var currency = String(account.currency || prof.currency || "USD").toUpperCase() || "USD";

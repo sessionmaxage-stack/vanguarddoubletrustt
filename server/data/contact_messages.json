@@ -1,5 +1,17 @@
 [
   {
+    "messageId": "MSG-e9978b7a-8076-4592-a9b6-5a1438402488",
+    "name": "Elizabeth Bennet",
+    "email": "client_1788119154464@usermail.com",
+    "phone": "+1 555-234-5678",
+    "subject": "Mortgage Enquiry",
+    "message": "I would like to enquire about premium fixed mortgage rates for a residential property.",
+    "status": "NEW",
+    "createdAt": "2026-08-30T19:45:54.465Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
     "messageId": "MSG-80e4bd82-57ed-4e45-a37d-89b0eeb8dad2",
     "name": "Elizabeth Bennet",
     "email": "client_1788113211992@usermail.com",

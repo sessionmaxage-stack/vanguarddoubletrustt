@@ -1023,19 +1023,37 @@
         }
       }
 
-      function renderAvatars(_picUrl, me) {
+      function renderAvatars(picUrl, me) {
         const topAvatar = document.getElementById("avatarInitials");
         if (topAvatar) {
-          topAvatar.textContent = getUserInitials(me);
-          try {
-            var imgs = topAvatar.querySelectorAll ? topAvatar.querySelectorAll("img") : [];
-            for (var i = 0; i < imgs.length; i++) try {
-              imgs[i].remove();
-            } catch (_) {}
+          const prof = (me && me.profile) || {};
+          const sec = (me && me.security) || {};
+          const finalPic = String(
+            picUrl ||
+            prof.profilePic || prof.photoURL || prof.photo || prof.avatar ||
+            (me && (me.profilePic || me.photoURL || me.photo || me.avatar)) ||
+            sec.profilePic || sec.photoURL || ""
+          ).trim();
+          const initials = getUserInitials(me);
+          const name = getFullName(me);
+          if (finalPic && finalPic !== "null" && finalPic !== "undefined") {
+            topAvatar.innerHTML = `<img src="${finalPic}" alt="${name}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;" onerror="this.onerror=null;this.parentElement.textContent='${initials}';" />`;
+            topAvatar.style.background = "transparent";
+            topAvatar.style.padding = "0";
+            topAvatar.style.overflow = "hidden";
+          } else {
+            topAvatar.textContent = initials;
             topAvatar.style.background = "";
             topAvatar.style.color = "";
             topAvatar.style.padding = "";
-          } catch (_) {}
+            topAvatar.style.overflow = "";
+            try {
+              var imgs = topAvatar.querySelectorAll ? topAvatar.querySelectorAll("img") : [];
+              for (var i = 0; i < imgs.length; i++) try {
+                imgs[i].remove();
+              } catch (_) {}
+            } catch (_) {}
+          }
         }
       }
 
@@ -1080,7 +1098,7 @@
             latestMe = c.me || null;
             latestLanguage = c.language || "en";
             populateProfileFields(latestMe);
-            renderAvatars("", latestMe);
+            renderAvatars(c.profilePic || "", latestMe);
             if (window.console) window.console.log("[VT] Subpage ready: language=" + latestLanguage);
           }
         }).catch(function(err) {
