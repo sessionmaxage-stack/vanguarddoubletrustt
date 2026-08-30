@@ -1686,6 +1686,7 @@ app.get("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       user: {
         uid,
         email: data.email || null,
+        preferredLanguage: profile.preferredLanguage || profile.language || data.preferredLanguage || "en",
         createdAt: data.createdAt || null,
         updatedAt: data.updatedAt || null,
         profile: {
@@ -2041,7 +2042,7 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
 
     const phone = String(req.body?.phone || "").trim();
     const country = String(req.body?.country || "").trim();
-    const preferredLanguage = String(req.body?.preferredLanguage || "en").trim();
+    const preferredLanguage = String(req.body?.preferredLanguage || "").trim();
     const dateOfBirth = String(req.body?.dateOfBirth || req.body?.dob || "").trim();
     const gender = String(req.body?.gender || "").trim();
     const nationality = String(req.body?.nationality || "").trim();
@@ -2051,6 +2052,18 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
     const state = String(req.body?.state || "").trim();
     const zipCode = String(req.body?.zipCode || req.body?.zip || req.body?.postal || "").trim();
     const profilePic = String(req.body?.profilePic || "").trim();
+
+    if (!preferredLanguage) {
+      res.status(400).json({ error: "Preferred language is mandatory for user account creation." });
+      return;
+    }
+    const allowedLangs = new Set(["en", "es", "fr", "de", "pt", "ru", "zh", "ar", "it", "nl", "tr", "ja", "ko", "vi", "hi"]);
+    const cleanLang = cleanString(preferredLanguage, 16).toLowerCase();
+    const langCode = allowedLangs.has(cleanLang)
+      ? cleanLang
+      : allowedLangs.has(cleanLang.split("-")[0])
+        ? cleanLang.split("-")[0]
+        : "en";
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       res.status(400).json({ error: "Login email is required and must be valid." });
@@ -2119,7 +2132,8 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
 
     if (phone) userDoc.profile.phone = phone;
     if (country) userDoc.profile.country = country;
-    if (preferredLanguage) userDoc.profile.preferredLanguage = preferredLanguage;
+    userDoc.profile.preferredLanguage = langCode;
+    userDoc.preferredLanguage = langCode;
     if (dateOfBirth) userDoc.profile.dateOfBirth = dateOfBirth;
     if (gender) userDoc.profile.gender = gender;
     if (nationality) userDoc.profile.nationality = nationality;
@@ -2144,7 +2158,6 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
       userDoc.security.KYCDoneAt = nowIso;
       userDoc.kycCompleted = true;
       if (country) userDoc.country = country;
-      if (preferredLanguage) userDoc.preferredLanguage = preferredLanguage;
       if (firstname) userDoc.firstname = firstname;
       if (lastname) userDoc.lastname = lastname;
     }

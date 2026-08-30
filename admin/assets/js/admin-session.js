@@ -164,6 +164,7 @@
         ${kv("First name", escapeHtml(prof.firstname || ""))}
         ${kv("Last name", escapeHtml(prof.lastname || ""))}
         ${kv("Email", escapeHtml(u.email || ""))}
+        ${kv("Preferred Language", `<span class="pill info">${escapeHtml(String(prof.preferredLanguage || u.preferredLanguage || "en").toUpperCase())}</span>`)}
         ${kv("Phone", escapeHtml(prof.phone || ""))}
         ${kv("Gender", escapeHtml(prof.gender || ""))}
         ${kv("Date of birth", escapeHtml(prof.dateOfBirth || ""))}
@@ -810,10 +811,14 @@
 
     submitBtn?.addEventListener("click", async () => {
       flashCreate("");
+      const payload = collectCreateForm();
+      if (!payload.preferredLanguage || !payload.preferredLanguage.trim()) {
+        flashCreate("Preferred Language is mandatory. Please select an account language.", true);
+        return;
+      }
       submitBtn.disabled = true;
       submitBtn.textContent = "Creating...";
       try {
-        const payload = collectCreateForm();
         const data = await api("/api/admin/users", {
           method: "POST",
           body: JSON.stringify(payload)

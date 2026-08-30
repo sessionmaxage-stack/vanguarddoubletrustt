@@ -2557,7 +2557,12 @@
       if (window.VT) { window.VT._dbg1 = "bootstrapCustomerPage OK"; window.VT._me = me; }
     } catch (_) {}
     try {
-      if (typeof window.__vtApplyI18n === "function") window.__vtApplyI18n(lang);
+      if (window.VT && window.VT.I18N && typeof window.VT.I18N.apply === "function") {
+        window.VT.I18N.apply(lang, document);
+      }
+      if (typeof window.__vtApplyI18n === "function") {
+        window.__vtApplyI18n(lang);
+      }
     } catch (_) {}
     if (after) {
       try { after(ctx); } catch (e) { if (window.console) console.error("[VT] bootstrapCustomerPage after() failed:", e); }
