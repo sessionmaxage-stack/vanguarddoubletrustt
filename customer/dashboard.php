@@ -1499,6 +1499,18 @@
                 </div>
                 <div class="vt-row">
                   <div class="left">
+                    <div class="pill"><i class="fas fa-code-branch"></i></div>
+                    <div>
+                      <strong>Branch Code</strong>
+                      <span>RBBS0001</span>
+                    </div>
+                  </div>
+                  <div class="right">
+                    <span> </span>
+                  </div>
+                </div>
+                <div class="vt-row">
+                  <div class="left">
                     <div class="pill"><i class="fas fa-hashtag"></i></div>
                     <div>
                       <strong>Account Number</strong>
@@ -1508,18 +1520,6 @@
                   </div>
                   <div class="right">
                     <span class="up">Verified</span>
-                  </div>
-                </div>
-                <div class="vt-row">
-                  <div class="left">
-                    <div class="pill"><i class="fas fa-code-branch"></i></div>
-                    <div>
-                      <strong>Branch Code</strong>
-                      <span>RBBS0001</span>
-                    </div>
-                  </div>
-                  <div class="right">
-                    <span> </span>
                   </div>
                 </div>
               </div>
