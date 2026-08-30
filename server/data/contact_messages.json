@@ -1,0 +1,38 @@
+[
+  {
+    "messageId": "MSG-80e4bd82-57ed-4e45-a37d-89b0eeb8dad2",
+    "name": "Elizabeth Bennet",
+    "email": "client_1788113211992@usermail.com",
+    "phone": "+1 555-234-5678",
+    "subject": "Mortgage Enquiry",
+    "message": "I would like to enquire about premium fixed mortgage rates for a residential property.",
+    "status": "NEW",
+    "createdAt": "2026-08-30T18:06:51.999Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
+    "messageId": "MSG-04e581f5-337f-48b1-b2f0-3f6b270c6c75",
+    "name": "Elizabeth Bennet",
+    "email": "client_1788113033637@usermail.com",
+    "phone": "+1 555-234-5678",
+    "subject": "Mortgage Enquiry",
+    "message": "I would like to enquire about premium fixed mortgage rates for a residential property.",
+    "status": "NEW",
+    "createdAt": "2026-08-30T18:03:53.643Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
+    "messageId": "MSG-1b47c85e-064b-45c7-b85b-c5728d7cdd1a",
+    "name": "Elizabeth Bennet",
+    "email": "client_1788112331466@usermail.com",
+    "phone": "+1 555-234-5678",
+    "subject": "Mortgage Enquiry",
+    "message": "I would like to enquire about premium fixed mortgage rates for a residential property.",
+    "status": "NEW",
+    "createdAt": "2026-08-30T17:52:11.476Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  }
+]

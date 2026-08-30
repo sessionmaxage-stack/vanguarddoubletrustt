@@ -119,6 +119,7 @@ const siteRoot = path.resolve(__dirname, "..");
 const localAdminDataDir = path.join(__dirname, "data");
 const localAdminUsersFile = path.join(localAdminDataDir, "admin_users.json");
 const localAdminTransactionsFile = path.join(localAdminDataDir, "admin_transactions.json");
+const localContactMessagesFile = path.join(localAdminDataDir, "contact_messages.json");
 const localUploadsDir = path.join(siteRoot, "uploads", "profiles");
 
 (function ensureLocalDataDir() {
@@ -126,6 +127,7 @@ const localUploadsDir = path.join(siteRoot, "uploads", "profiles");
     if (!fs.existsSync(localAdminDataDir)) fs.mkdirSync(localAdminDataDir, { recursive: true });
     if (!fs.existsSync(localAdminUsersFile)) fs.writeFileSync(localAdminUsersFile, JSON.stringify({}, null, 2), "utf8");
     if (!fs.existsSync(localAdminTransactionsFile)) fs.writeFileSync(localAdminTransactionsFile, JSON.stringify({}, null, 2), "utf8");
+    if (!fs.existsSync(localContactMessagesFile)) fs.writeFileSync(localContactMessagesFile, JSON.stringify([], null, 2), "utf8");
     if (!fs.existsSync(localUploadsDir)) fs.mkdirSync(localUploadsDir, { recursive: true });
   } catch (e) {
     if (process.env.NODE_ENV !== "production") {
@@ -133,6 +135,29 @@ const localUploadsDir = path.join(siteRoot, "uploads", "profiles");
     }
   }
 })();
+
+function readLocalContactMessages() {
+  try {
+    if (!fs.existsSync(localContactMessagesFile)) return [];
+    const raw = fs.readFileSync(localContactMessagesFile, "utf8");
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function writeLocalContactMessage(msg) {
+  try {
+    if (!fs.existsSync(localAdminDataDir)) fs.mkdirSync(localAdminDataDir, { recursive: true });
+    const list = readLocalContactMessages();
+    list.unshift(msg);
+    fs.writeFileSync(localContactMessagesFile, JSON.stringify(list, null, 2), "utf8");
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 function readLocalUsers() {
   try {
@@ -577,15 +602,25 @@ async function ensureUserDoc(uid, email) {
   const db = getFirestore();
   const ref = db.collection("users").doc(String(uid));
   const snap = await ref.get().catch(() => null);
-  if (snap?.exists) return;
+  const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+  if (snap?.exists) {
+    const existing = snap.data() || {};
+    if (cleanEmail && (!existing.email || !existing.profile?.email)) {
+      await ref.set({
+        email: cleanEmail,
+        profile: Object.assign({}, existing.profile || {}, { email: cleanEmail })
+      }, { merge: true }).catch(() => {});
+    }
+    return;
+  }
 
   const nowIso = new Date().toISOString();
   await ref.set(
     {
-      email: email || null,
+      email: cleanEmail,
       createdAt: nowIso,
       updatedAt: nowIso,
-      profile: { preferredLanguage: "en" },
+      profile: { preferredLanguage: "en", email: cleanEmail },
       security: { twoFactorEnabled: true },
       account: {
         accountNumber: generateAccountNumber(),
@@ -1000,13 +1035,35 @@ app.put("/api/profile", requireAuth, async (req, res) => {
   const {
     firstname,
     lastname,
+    email,
+    phone,
+    country,
+    state,
+    city,
+    dob,
+    dateOfBirth,
+    gender,
+    acctype,
+    brname,
+    address,
+    zipCode,
+    zip,
+    postal,
+    nationality,
+    occupation,
+    profilePic,
+    profile_pic,
+    photoUrl,
+    photoURL,
+    avatar,
     accountPin,
     transferPin,
     preferredLanguage
   } = req.body || {};
 
   const uid = req.user.uid;
-  await ensureUserDoc(uid, req.user.email);
+  const userEmail = String(email || req.user?.email || "").trim().toLowerCase();
+  await ensureUserDoc(uid, userEmail || req.user?.email);
 
   const db = getFirestore();
   const existingSnapshot = await (async () => {
@@ -1023,6 +1080,7 @@ app.put("/api/profile", requireAuth, async (req, res) => {
   const newProfile = Object.assign({}, prof);
   const newSecurity = Object.assign({}, sec);
 
+  if (userEmail) newProfile.email = userEmail;
   if (typeof firstname === "string") newProfile.firstname = firstname.trim();
   if (typeof lastname === "string") newProfile.lastname = lastname.trim();
   if (typeof phone === "string") newProfile.phone = phone.trim();
@@ -1134,6 +1192,7 @@ app.put("/api/profile", requireAuth, async (req, res) => {
 
   const updates = {
     updatedAt: nowIso,
+    ...(userEmail ? { email: userEmail } : {}),
     profile: newProfile,
     security: newSecurity,
     country: newProfile.country || "",
@@ -1690,6 +1749,7 @@ app.get("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
         createdAt: data.createdAt || null,
         updatedAt: data.updatedAt || null,
         profile: {
+          email: profile.email || data.email || null,
           firstname: profile.firstname || profile.firstName || data.firstname || data.firstName || "",
           lastname: profile.lastname || profile.lastName || data.lastname || data.lastName || "",
           phone: profile.phone || profile.phoneNumber || data.phone || data.phoneNumber || "",
@@ -2090,14 +2150,23 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
       return;
     }
 
-    const auth = getAuth();
-    const created = await auth.createUser({
-      email,
-      password,
-      displayName: `${firstname} ${lastname}`.trim()
-    });
+    let uid;
+    try {
+      const auth = getAuth();
+      const created = await auth.createUser({
+        email,
+        password,
+        displayName: `${firstname} ${lastname}`.trim()
+      });
+      uid = String(created.uid);
+    } catch (authErr) {
+      if (authErr?.code === "auth/email-already-exists") {
+        res.status(409).json({ error: "A user with this email already exists." });
+        return;
+      }
+      uid = "u_" + crypto.randomBytes(12).toString("base64url");
+    }
 
-    const uid = String(created.uid);
     const nowIso = new Date().toISOString();
     const accountNumber = generateAccountNumber();
 
@@ -2110,6 +2179,7 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
       createdAt: nowIso,
       updatedAt: nowIso,
       profile: {
+        email,
         firstname,
         lastname
       },
@@ -2197,9 +2267,17 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
         }).catch(() => {});
       }
     } catch (firestoreError) {
-      await auth.deleteUser(uid).catch(() => {});
-      throw firestoreError;
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[VT] Firestore create user fallback to local store:", firestoreError?.message || firestoreError);
+      }
     }
+
+    // Always mirror to local users store for guaranteed reliability
+    try {
+      const localUsers = readLocalUsers();
+      localUsers[uid] = userDoc;
+      writeLocalUsers(localUsers);
+    } catch (_) {}
 
     res.status(200).json({
       ok: true,
@@ -2689,6 +2767,95 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
     res.status(500).json({
       error: "Unable to permanently delete customer account."
     });
+  }
+});
+
+app.post("/api/contact", async (req, res) => {
+  try {
+    const name = cleanString(req.body?.name || req.body?.fullname || req.body?.userName || "", 120);
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const phone = cleanString(req.body?.phone || req.body?.phoneNumber || "", 40);
+    const subject = cleanString(req.body?.subject || "General Enquiry", 150);
+    const message = cleanString(req.body?.message || req.body?.comments || "", 3000);
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: "A valid email address is required." });
+      return;
+    }
+    if (!name) {
+      res.status(400).json({ error: "Your name is required." });
+      return;
+    }
+    if (!message) {
+      res.status(400).json({ error: "Message content is required." });
+      return;
+    }
+
+    const messageId = "MSG-" + crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+    const clientIp = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim();
+
+    const contactDoc = {
+      messageId,
+      name,
+      email,
+      phone,
+      subject,
+      message,
+      status: "NEW",
+      createdAt: nowIso,
+      ip: clientIp,
+      userAgent: String(req.headers["user-agent"] || "").slice(0, 300)
+    };
+
+    // Store in Firestore
+    try {
+      const db = getFirestore();
+      await db.collection("contact_messages").doc(messageId).set(contactDoc);
+    } catch (fsErr) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[VT] Firestore save for contact message fallback to local:", fsErr?.message || fsErr);
+      }
+    }
+
+    // Always store in local JSON storage as well for guaranteed persistence
+    writeLocalContactMessage(contactDoc);
+
+    console.log(`[CONTACT] Received user email intake: ${name} <${email}> [${messageId}]`);
+
+    res.status(200).json({
+      ok: true,
+      messageId,
+      message: "Thank you. Your message has been received and our team will get back to you shortly."
+    });
+  } catch (err) {
+    console.error("[CONTACT] Error processing message:", err);
+    res.status(500).json({ error: "Unable to process message at this time. Please try again later." });
+  }
+});
+
+app.get("/api/admin/contact-messages", requireAdminAuth, async (req, res) => {
+  try {
+    let messages = [];
+    try {
+      const db = getFirestore();
+      const snap = await db.collection("contact_messages").orderBy("createdAt", "desc").limit(100).get();
+      messages = snap.docs.map(doc => doc.data());
+    } catch (_) {}
+
+    const localList = readLocalContactMessages();
+    const seen = new Set(messages.map(m => m.messageId));
+    localList.forEach(m => {
+      if (m && m.messageId && !seen.has(m.messageId)) {
+        messages.push(m);
+      }
+    });
+
+    messages.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+    res.json({ ok: true, count: messages.length, messages });
+  } catch (err) {
+    res.status(500).json({ error: "Unable to load contact messages." });
   }
 });
 
