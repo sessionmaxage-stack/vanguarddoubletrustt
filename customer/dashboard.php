@@ -314,7 +314,7 @@
 
       .vt-grid {
         display: grid;
-        grid-template-columns: 1.35fr 0.65fr;
+        grid-template-columns: 1fr;
         gap: 16px;
         align-items: start;
       }
@@ -444,6 +444,11 @@
       .vt-right-card {
         display: grid;
         gap: 16px;
+        margin-top: 14px;
+      }
+
+      .vt-list {
+        margin-top: 14px;
       }
 
       .vt-fake-card {
@@ -1177,12 +1182,6 @@
         display: block;
       }
 
-      @media (max-width: 1099px) {
-        .vt-right-card {
-          order: -1;
-        }
-      }
-
       @media (max-width: 560px) {
         .vt-fake-card {
           height: auto;
@@ -1427,6 +1426,17 @@
                 </div>
               </div>
 
+              <aside class="vt-right-card">
+                <div class="vt-fake-card">
+                  <div class="chip"></div>
+                  <div class="num" id="cardNumberDisplay">5555 8421 6890 0315</div>
+                  <div class="meta">
+                    <div id="cardNameDisplay">VanguardDoubleTrust</div>
+                    <div><span data-i18n="card_exp">VALID THRU</span> 08/30</div>
+                  </div>
+                </div>
+              </aside>
+
               <div class="vt-card pad vt-list">
                 <div class="head">
                   <strong data-i18n="mk_watchlist">Market Watch</strong>
@@ -1513,17 +1523,6 @@
                 </div>
               </div>
             </section>
-
-            <aside class="vt-right-card">
-              <div class="vt-fake-card">
-                <div class="chip"></div>
-                <div class="num" id="cardNumberDisplay">5555 8421 6890 0315</div>
-                <div class="meta">
-                  <div id="cardNameDisplay">VanguardDoubleTrust</div>
-                  <div><span data-i18n="card_exp">VALID THRU</span> 08/30</div>
-                </div>
-              </div>
-            </aside>
           </div>
         </div>
 
