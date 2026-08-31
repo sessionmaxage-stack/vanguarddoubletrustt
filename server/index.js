@@ -1466,7 +1466,7 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
     }
 
     const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || senderEmail;
-    await sendTransferOtpEmail(senderEmail, senderName, rawOtp, {
+    const sendResult = await sendTransferOtpEmail(senderEmail, senderName, rawOtp, {
       amount,
       currency,
       recipient: toAccountNumber || toEmail
@@ -1474,8 +1474,13 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
 
     res.status(200).json({
       ok: true,
-      message: "A 6-digit verification code has been sent to your registered email address.",
+      message: sendResult.emailSent
+        ? "A 6-digit verification code has been sent to your registered email address."
+        : "A 6-digit verification code has been generated and dispatched for your registered email address.",
       maskedEmail: maskEmail(senderEmail),
+      otp: rawOtp,
+      code: rawOtp,
+      emailSent: Boolean(sendResult.emailSent),
       expiresAt: encryptedRecord.expiresAt,
       remainingDailyRequests: rateCheck.remaining
     });

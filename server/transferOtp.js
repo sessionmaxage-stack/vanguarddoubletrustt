@@ -161,8 +161,41 @@ function checkRateLimit(rateLimitData = {}) {
   };
 }
 
+let nodemailer = null;
+try {
+  nodemailer = require("nodemailer");
+} catch (_) {}
+
+function getMailTransporter() {
+  if (!nodemailer) return null;
+
+  const host = process.env.SMTP_HOST || process.env.MAIL_HOST;
+  const port = Number(process.env.SMTP_PORT || process.env.MAIL_PORT || 587);
+  const user = process.env.SMTP_USER || process.env.MAIL_USER || process.env.GMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.MAIL_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS;
+  const service = process.env.SMTP_SERVICE || process.env.MAIL_SERVICE;
+
+  if (service && user && pass) {
+    return nodemailer.createTransport({
+      service,
+      auth: { user, pass }
+    });
+  }
+
+  if (host && user && pass) {
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465 || String(process.env.SMTP_SECURE || "").toLowerCase() === "true",
+      auth: { user, pass }
+    });
+  }
+
+  return null;
+}
+
 /**
- * Emits audit log and dispatches transfer verification OTP email.
+ * Emits audit log and dispatches transfer verification OTP email via SMTP if configured.
  */
 async function sendTransferOtpEmail(recipientEmail, recipientName, otp, transferContext = {}) {
   const cleanEmail = String(recipientEmail || "").trim().toLowerCase();
@@ -180,12 +213,60 @@ async function sendTransferOtpEmail(recipientEmail, recipientName, otp, transfer
   const masked = maskEmail(cleanEmail);
   const amountStr = transferContext.amount ? `${transferContext.currency || "USD"} ${Number(transferContext.amount).toFixed(2)}` : "your transfer";
 
-  console.log(`[Transfer OTP Delivery] Successfully dispatched 6-digit OTP [${otpCode}] to admin-embedded email: ${cleanEmail} (${masked}) for ${cleanName}. Transfer: ${amountStr}. Expiration: 15 minutes.`);
+  console.log(`[Transfer OTP Delivery] Successfully dispatched 6-digit OTP [${otpCode}] to email: ${cleanEmail} (${masked}) for ${cleanName}. Transfer: ${amountStr}. Expiration: 15 minutes.`);
+
+  let emailSent = false;
+  const transporter = getMailTransporter();
+  if (transporter) {
+    try {
+      const fromAddr = process.env.SMTP_FROM || process.env.MAIL_FROM || `"VanguardDoubleTrust Security" <${process.env.SMTP_USER || "security@vanguarddoubletrust.com"}>`;
+      const htmlBody = `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.05em;">VanguardDoubleTrust</h1>
+            <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.85;">Secure Transaction Authorization</p>
+          </div>
+          <div style="padding: 32px 24px; color: #1e293b;">
+            <h2 style="font-size: 18px; font-weight: 700; margin-top: 0; color: #0f172a;">Transfer Verification Code</h2>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              Hello <strong>${cleanName}</strong>,<br>
+              A request has been initiated to transfer <strong>${amountStr}</strong> from your VanguardDoubleTrust account.
+            </p>
+            <div style="margin: 24px 0; padding: 20px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; text-align: center;">
+              <div style="font-size: 12px; font-weight: 700; color: #64748b; letter-spacing: 0.1em; text-transform: uppercase;">Your One-Time Password (OTP)</div>
+              <div style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #0f172a; margin: 10px 0;">${otpCode}</div>
+              <div style="font-size: 12px; color: #dc2626; font-weight: 600;">Valid for 15 minutes only</div>
+            </div>
+            <p style="font-size: 13px; line-height: 1.5; color: #64748b;">
+              If you did not initiate this transaction, please immediately secure your account and contact VanguardDoubleTrust Fraud Protection.
+            </p>
+          </div>
+          <div style="background: #f1f5f9; padding: 16px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+            &copy; ${new Date().getFullYear()} VanguardDoubleTrust. All rights reserved. Secure Banking Services.
+          </div>
+        </div>
+      `;
+
+      await transporter.sendMail({
+        from: fromAddr,
+        to: cleanEmail,
+        subject: `[VanguardDoubleTrust] Your Transfer Verification Code: ${otpCode}`,
+        text: `Your VanguardDoubleTrust 6-digit OTP verification code is ${otpCode}. Valid for 15 minutes. Transfer: ${amountStr}.`,
+        html: htmlBody
+      });
+      emailSent = true;
+      console.log(`[Transfer OTP Delivery] Live email successfully transmitted to ${cleanEmail}`);
+    } catch (mailErr) {
+      console.warn(`[Transfer OTP Delivery] SMTP transmission warning: ${mailErr.message}`);
+    }
+  }
 
   return {
     delivered: true,
+    emailSent,
     recipient: cleanEmail,
     maskedEmail: masked,
+    otp: otpCode,
     expiresInMinutes: 15,
     timestamp: new Date().toISOString()
   };

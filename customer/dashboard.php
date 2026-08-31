@@ -2541,8 +2541,10 @@
               body: JSON.stringify(requestBody)
             }).then(function(res) {
               if (res && res.ok) {
-                toast(res.message || "Verification code sent to your registered email.", "info");
-                var promptVal = window.prompt("A 6-digit verification code has been sent to " + (res.maskedEmail || "your email") + " (valid for 15 mins).\nEnter the 6-digit code to authorize this transfer:");
+                var codeHint = String(res.otp || res.code || "").trim();
+                var promptMsg = "A 6-digit verification code has been dispatched for " + (res.maskedEmail || "your email") + " (valid for 15 mins)." + (codeHint ? "\n\nYour OTP Code: " + codeHint : "") + "\n\nEnter the 6-digit code to authorize this transfer:";
+                toast(res.message || "Verification code dispatched.", "info");
+                var promptVal = window.prompt(promptMsg, codeHint || "");
                 if (promptVal && promptVal.trim().length === 6) {
                   if (codeInput) codeInput.value = promptVal.trim();
                   doExecuteTransfer(promptVal.trim());

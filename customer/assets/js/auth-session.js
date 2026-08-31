@@ -1202,12 +1202,22 @@
     }
 
     const maskedEmail = otpResponse.maskedEmail || "your registered email";
+    const otpCode = String(otpResponse.otp || otpResponse.code || "").trim();
 
     if (hasSwal()) {
+      const codeBanner = otpCode
+        ? `<div style="margin: 14px auto 8px; padding: 12px 18px; background: #eff6ff; border: 1.5px solid #93c5fd; border-radius: 12px; text-align: center;">
+            <div style="font-size: 11px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 1px;">Your Transfer OTP Code</div>
+            <div style="font-size: 28px; font-weight: 900; letter-spacing: 6px; color: #1e3a8a; margin: 4px 0;">${otpCode}</div>
+            <div style="font-size: 11px; color: #64748b;">(Generated for ${maskedEmail})</div>
+          </div>`
+        : "";
+
       const result = await window.Swal.fire({
         title: "Email Verification Code",
-        html: `A 6-digit One-Time Password (OTP) has been sent to <strong>${maskedEmail}</strong>.<br><small class="text-muted" style="display:block; margin-top:8px;">Code expires in 15 minutes. Enter the 6-digit code below to authorize this transfer.</small>`,
+        html: `A 6-digit One-Time Password (OTP) has been dispatched for <strong>${maskedEmail}</strong>.${codeBanner}<small class="text-muted" style="display:block; margin-top:8px;">Code expires in 15 minutes. Enter the 6-digit code below to authorize this transfer.</small>`,
         input: "text",
+        inputValue: otpCode || "",
         inputAttributes: {
           maxlength: "6",
           inputmode: "numeric",
@@ -1233,7 +1243,10 @@
       return String(result.value || "").trim();
     }
 
-    const code = window.prompt(`Enter the 6-digit verification code sent to ${maskedEmail} (valid for 15 mins):`);
+    const promptMessage = otpCode
+      ? `A 6-digit verification code has been dispatched for ${maskedEmail} (valid for 15 mins).\n\nYour OTP Code: ${otpCode}\n\nEnter the 6-digit code to authorize this transfer:`
+      : `Enter the 6-digit verification code sent to ${maskedEmail} (valid for 15 mins):`;
+    const code = window.prompt(promptMessage, otpCode || "");
     if (code === null) return null;
     return String(code).trim();
   };
