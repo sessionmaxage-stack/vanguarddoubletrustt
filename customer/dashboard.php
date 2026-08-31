@@ -1427,25 +1427,6 @@
                 </div>
               </div>
 
-              <div class="vt-transactions">
-                <h4 data-i18n="recent_title">Recent Transactions</h4>
-                <div id="txRowsWrap" style="display:flex;flex-direction:column;gap:10px;">
-                  <div class="vt-empty" id="txEmptyState" data-i18n="recent_empty" style="display:none;">No transactions yet</div>
-                  <div id="txList"></div>
-                </div>
-              </div>
-            </section>
-
-            <aside class="vt-right-card">
-              <div class="vt-fake-card">
-                <div class="chip"></div>
-                <div class="num" id="cardNumberDisplay">5555 8421 6890 0315</div>
-                <div class="meta">
-                  <div id="cardNameDisplay">VanguardDoubleTrust</div>
-                  <div><span data-i18n="card_exp">VALID THRU</span> 08/30</div>
-                </div>
-              </div>
-
               <div class="vt-card pad vt-list">
                 <div class="head">
                   <strong data-i18n="mk_watchlist">Market Watch</strong>
@@ -1521,6 +1502,25 @@
                   <div class="right">
                     <span class="up">Verified</span>
                   </div>
+                </div>
+              </div>
+
+              <div class="vt-transactions">
+                <h4 data-i18n="recent_title">Recent Transactions</h4>
+                <div id="txRowsWrap" style="display:flex;flex-direction:column;gap:10px;">
+                  <div class="vt-empty" id="txEmptyState" data-i18n="recent_empty" style="display:none;">No transactions yet</div>
+                  <div id="txList"></div>
+                </div>
+              </div>
+            </section>
+
+            <aside class="vt-right-card">
+              <div class="vt-fake-card">
+                <div class="chip"></div>
+                <div class="num" id="cardNumberDisplay">5555 8421 6890 0315</div>
+                <div class="meta">
+                  <div id="cardNameDisplay">VanguardDoubleTrust</div>
+                  <div><span data-i18n="card_exp">VALID THRU</span> 08/30</div>
                 </div>
               </div>
             </aside>
