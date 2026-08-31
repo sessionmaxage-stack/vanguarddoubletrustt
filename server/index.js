@@ -1427,7 +1427,44 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
     );
 
     // 5. Send OTP to user's registered email
-    const senderEmail = senderDoc.email || req.user.email || "";
+    let senderEmail = String(
+      senderDoc?.email ||
+      senderDoc?.profile?.email ||
+      req.user?.email ||
+      ""
+    ).trim().toLowerCase();
+
+    if (!senderEmail) {
+      try {
+        const localUsers = readLocalUsers();
+        if (localUsers[uid]?.email || localUsers[uid]?.profile?.email) {
+          senderEmail = String(localUsers[uid].email || localUsers[uid].profile.email).trim().toLowerCase();
+        }
+      } catch (_) {}
+    }
+    if (!senderEmail) {
+      try {
+        const auth = getAuth();
+        const authUser = await auth.getUser(uid);
+        if (authUser?.email) {
+          senderEmail = String(authUser.email).trim().toLowerCase();
+        }
+      } catch (_) {}
+    }
+
+    if (!senderEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderEmail)) {
+      res.status(400).json({ error: "No valid registered email address is configured for this account. Please contact an administrator to verify your email." });
+      return;
+    }
+
+    // Auto-heal / sync missing email in Firestore if needed
+    if (senderEmail && (!senderDoc.email || !senderDoc.profile?.email)) {
+      await senderRef.set({
+        email: senderEmail,
+        profile: { ...(senderDoc.profile || {}), email: senderEmail }
+      }, { merge: true }).catch(() => {});
+    }
+
     const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || senderEmail;
     await sendTransferOtpEmail(senderEmail, senderName, rawOtp, {
       amount,
@@ -2329,8 +2366,26 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
   const firstname = req.body?.firstname;
   const lastname = req.body?.lastname;
   const accountNumber = req.body?.accountNumber;
+  const email = req.body?.email;
 
   let deltaInfo = null;
+
+  /*
+   * EMAIL
+   */
+  if (typeof email === "string" && email.trim()) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      res.status(400).json({ error: "Invalid email format." });
+      return;
+    }
+    updates["email"] = cleanEmail;
+    updates["profile.email"] = cleanEmail;
+    try {
+      const auth = getAuth();
+      await auth.updateUser(uid, { email: cleanEmail });
+    } catch (_) {}
+  }
 
   /*
    * BALANCE
@@ -2494,7 +2549,42 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       deltaInfo.currency = currency;
     }
 
-    await userRef.set(updates, {
+    const firestoreUpdates = {
+      updatedAt: updates.updatedAt
+    };
+    if (updates.email) {
+      firestoreUpdates.email = updates.email;
+      firestoreUpdates["profile.email"] = updates.email;
+      if (!firestoreUpdates.profile) firestoreUpdates.profile = {};
+      firestoreUpdates.profile.email = updates.email;
+    }
+    if (typeof updates["profile.firstname"] !== "undefined") {
+      firestoreUpdates["profile.firstname"] = updates["profile.firstname"];
+      if (!firestoreUpdates.profile) firestoreUpdates.profile = {};
+      firestoreUpdates.profile.firstname = updates["profile.firstname"];
+    }
+    if (typeof updates["profile.lastname"] !== "undefined") {
+      firestoreUpdates["profile.lastname"] = updates["profile.lastname"];
+      if (!firestoreUpdates.profile) firestoreUpdates.profile = {};
+      firestoreUpdates.profile.lastname = updates["profile.lastname"];
+    }
+    if (typeof updates["account.balance"] !== "undefined") {
+      firestoreUpdates["account.balance"] = updates["account.balance"];
+      if (!firestoreUpdates.account) firestoreUpdates.account = {};
+      firestoreUpdates.account.balance = updates["account.balance"];
+    }
+    if (typeof updates["account.status"] !== "undefined") {
+      firestoreUpdates["account.status"] = updates["account.status"];
+      if (!firestoreUpdates.account) firestoreUpdates.account = {};
+      firestoreUpdates.account.status = updates["account.status"];
+    }
+    if (typeof updates["account.accountNumber"] !== "undefined") {
+      firestoreUpdates["account.accountNumber"] = updates["account.accountNumber"];
+      if (!firestoreUpdates.account) firestoreUpdates.account = {};
+      firestoreUpdates.account.accountNumber = updates["account.accountNumber"];
+    }
+
+    await userRef.set(firestoreUpdates, {
       merge: true
     });
 
@@ -2543,6 +2633,10 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
         if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
         if (typeof updates["account.accountNumber"] !== "undefined") curAccount.accountNumber = updates["account.accountNumber"];
+        if (typeof updates["email"] !== "undefined") {
+          cur.email = updates["email"];
+          curProfile.email = updates["email"];
+        }
         cur.updatedAt = updates.updatedAt;
         cur.profile = curProfile;
         cur.account = curAccount;
@@ -2566,6 +2660,10 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
         if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
         if (typeof updates["account.accountNumber"] !== "undefined") curAccount.accountNumber = updates["account.accountNumber"];
+        if (typeof updates["email"] !== "undefined") {
+          cur.email = updates["email"];
+          curProfile.email = updates["email"];
+        }
         cur.updatedAt = new Date().toISOString();
         cur.profile = curProfile;
         cur.account = curAccount;
