@@ -1360,6 +1360,17 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
     const amount = Number(amountRaw);
     const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
     const memo = String(b.memo || b.note || b.reference || "").trim();
+    const transferPinCandidate = String(b.transferPin || b.transferCode || b.transactionPin || b.txPin || "").trim();
+
+    // 0. Validate Transfer PIN before proceeding (MANDATORY per PIN-OTP sequence)
+    if (!transferPinCandidate) {
+      res.status(400).json({ error: "Transfer PIN (Transaction Code) is required. Please enter your 6-digit Transfer PIN to initiate the transfer authorization." });
+      return;
+    }
+    if (!isTransferCodeValid(transferPinCandidate)) {
+      res.status(400).json({ error: "Invalid Transfer PIN format. Transfer PIN must be exactly 6 digits or a strong 8+ character code." });
+      return;
+    }
 
     // 1. Trigger condition validation: must be an explicit money transfer initiation
     if (!toAccountNumber && !toEmail) {
@@ -1386,6 +1397,19 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       return;
     }
 
+    const security = senderDoc.security || {};
+    const storedTransferPinHash = security.transferPinHash || null;
+    if (!storedTransferPinHash) {
+      res.status(400).json({ error: "Transfer PIN is not configured for this account. Please contact an administrator." });
+      return;
+    }
+
+    const candidateHash = sha256Hex(transferPinCandidate);
+    if (String(candidateHash) !== String(storedTransferPinHash)) {
+      res.status(401).json({ error: "Invalid Transfer PIN. Please check your Transaction Code and try again." });
+      return;
+    }
+
     const currentBalance = Number(senderAccount?.balance || 0);
     if (currentBalance < amount) {
       res.status(400).json({
@@ -1395,7 +1419,6 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
     }
 
     // 2. Enforce 24-hour rate limiting
-    const security = senderDoc.security || {};
     const rateLimitData = security.transferOtpRateLimit || {};
     const rateCheck = checkRateLimit(rateLimitData);
     if (!rateCheck.allowed) {
@@ -1403,7 +1426,7 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       return;
     }
 
-    // 3. Generate 6-digit OTP and encrypt at rest (AES-256-GCM, 15-minute expiration)
+    // 3. Generate 6-digit cryptographically secure OTP and encrypt at rest (AES-256-GCM, 15-minute expiration)
     const rawOtp = generate6DigitOtp();
     const encryptedRecord = encryptOtpRecord(rawOtp, {
       amount,
@@ -1412,6 +1435,16 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       toEmail,
       memo
     });
+
+    encryptedRecord.transferPinVerified = true;
+    encryptedRecord.transferPinVerifiedAt = Date.now();
+    encryptedRecord.transferContext = {
+      amount,
+      currency,
+      toAccountNumber,
+      toEmail,
+      memo
+    };
 
     // 4. Temporarily store encrypted OTP and update 24-hour rate limit history
     await senderRef.set(
@@ -1427,7 +1460,7 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       { merge: true }
     );
 
-    // 5. Send OTP to user's registered email
+    // 5. Send OTP to user's registered email (confirm email delivery)
     let senderEmail = String(
       senderDoc?.email ||
       senderDoc?.profile?.email ||
@@ -1473,16 +1506,24 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       recipient: toAccountNumber || toEmail
     });
 
+    if (!sendResult.delivered) {
+      res.status(500).json({ error: "Verification code email delivery failed. Please check your email configuration or contact support." });
+      return;
+    }
+
     res.status(200).json({
       ok: true,
       message: sendResult.emailSent
-        ? "A 6-digit verification code has been sent to your registered email address."
-        : "A 6-digit verification code has been generated and dispatched for your registered email address.",
+        ? "Transfer PIN verified. A 6-digit verification code has been sent to your registered email address."
+        : "Transfer PIN verified. A 6-digit verification code has been dispatched.",
       maskedEmail: maskEmail(senderEmail),
       otp: rawOtp,
       code: rawOtp,
       emailSent: Boolean(sendResult.emailSent),
+      emailDelivered: Boolean(sendResult.delivered),
       expiresAt: encryptedRecord.expiresAt,
+      expiresInMinutes: 15,
+      transferPinVerified: true,
       remainingDailyRequests: rateCheck.remaining
     });
   } catch (e) {
@@ -1529,6 +1570,39 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const otpValidation = decryptAndVerifyOtp(storedOtpRecord, candidateOtp);
   if (!otpValidation.valid) {
     res.status(401).json({ error: otpValidation.error });
+    return;
+  }
+
+  // PIN-OTP SEQUENCE ENFORCEMENT: Ensure Transfer PIN was verified before this OTP was issued
+  if (!storedOtpRecord || storedOtpRecord.transferPinVerified !== true) {
+    res.status(401).json({ error: "Transfer authorization is incomplete. You must first verify your Transfer PIN to generate a valid verification code. Please restart the transfer process and enter your Transfer PIN." });
+    return;
+  }
+
+  // TRANSFER CONTEXT BINDING: Ensure OTP is only used for THIS specific active transfer transaction
+  const storedContext = storedOtpRecord.transferContext || {};
+  const boundAmount = Number(storedContext.amount);
+  const boundCurrency = String(storedContext.currency || "USD").toUpperCase();
+  const boundToAccount = String(storedContext.toAccountNumber || "").trim();
+  const boundToEmail = String(storedContext.toEmail || "").trim().toLowerCase();
+
+  if (Number.isFinite(boundAmount) && boundAmount > 0) {
+    const amountDiff = Math.abs(Number(amount) - boundAmount);
+    if (amountDiff > 0.009) {
+      res.status(400).json({ error: "This verification code is bound to a different transfer amount. The OTP can only be used for the exact transaction it was generated for. Please restart the transfer process with your intended amount." });
+      return;
+    }
+  }
+  if (boundCurrency && currency !== boundCurrency) {
+    res.status(400).json({ error: "This verification code is bound to a different currency. Please restart the transfer process." });
+    return;
+  }
+  if (boundToAccount && toAccountNumber && toAccountNumber !== boundToAccount) {
+    res.status(400).json({ error: "This verification code is bound to a different recipient account. The OTP can only authorize the specific transfer it was generated for. Please restart the transfer." });
+    return;
+  }
+  if (boundToEmail && toEmail && toEmail !== boundToEmail) {
+    res.status(400).json({ error: "This verification code is bound to a different recipient. Please restart the transfer process." });
     return;
   }
 

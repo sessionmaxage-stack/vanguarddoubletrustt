@@ -1181,7 +1181,9 @@
           toEmail: transferContext.toEmail,
           amount: transferContext.amount,
           currency: transferContext.currency || "USD",
-          memo: transferContext.memo
+          memo: transferContext.memo,
+          transferPin: transferContext.transferPin,
+          transferCode: transferContext.transferPin
         })
       });
       otpResponse = await res.json();
@@ -1251,8 +1253,13 @@
     return String(code).trim();
   };
 
-  const processTransfer = async () => {
+  const processTransfer = async (opts) => {
     try {
+      const transferPin = (opts && opts.transferPin) || "";
+      if (!transferPin) {
+        throw new Error("Transfer PIN (Transaction Code) is required to authorize this transfer.");
+      }
+
       /*
        * Look up the VanguardDoubleTrust recipient by account number.
        * The backend performs the authoritative lookup.
@@ -1307,7 +1314,8 @@
         toEmail: recipient.email || "",
         amount: amount,
         currency: recipient.currency || "USD",
-        memo: `Bank transfer to ${recipient.fullName || receiverName}`
+        memo: `Bank transfer to ${recipient.fullName || receiverName}`,
+        transferPin: transferPin
       });
 
       if (otp === null) {
@@ -1489,6 +1497,48 @@
     }
   };
 
+  const collectTransferPin = async () => {
+    if (hasSwal()) {
+      const result = await window.Swal.fire({
+        icon: "lock",
+        title: "Enter Transfer PIN",
+        html: `
+          <div style="text-align:center;font-size:14px;color:#475569;line-height:1.7;">
+            Please enter your <strong>Transfer PIN</strong> (Transaction Code) to continue.<br/>
+            After verification, a 6-digit OTP will be sent to your registered email.
+          </div>
+        `,
+        input: "password",
+        inputPlaceholder: "Enter your Transfer PIN",
+        inputAttributes: {
+          autocomplete: "off",
+          autofocus: "autofocus",
+          style: "text-align:center;font-size:18px;letter-spacing:2px;"
+        },
+        showCancelButton: true,
+        confirmButtonText: "Verify & Send OTP",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#0f172a",
+        allowOutsideClick: false,
+        inputValidator: (value) => {
+          const v = String(value || "").trim();
+          if (!v) return "Transfer PIN is required.";
+          if (v.length < 6) return "Transfer PIN must be at least 6 characters.";
+          return undefined;
+        }
+      });
+      if (!result.isConfirmed) return null;
+      return String(result.value || "").trim();
+    }
+
+    const promptVal = window.prompt(
+      "Enter your Transfer PIN (Transaction Code).\n\nAfter verification, a 6-digit OTP will be emailed to you.\n\nTransfer PIN:",
+      ""
+    );
+    if (promptVal === null) return null;
+    return String(promptVal).trim();
+  };
+
   /*
    * FIRST confirmation:
    * "Send US$5,000 to Frank James?"
@@ -1521,7 +1571,12 @@
       return;
     }
 
-    await processTransfer();
+    const transferPin = await collectTransferPin();
+    if (!transferPin) {
+      return;
+    }
+
+    await processTransfer({ transferPin });
     return;
   }
 
@@ -1533,7 +1588,19 @@
     return;
   }
 
-  await processTransfer();
+  const transferPinFallback = await (async () => {
+    const pv = window.prompt(
+      "Enter your Transfer PIN (Transaction Code).\n\nAfter verification, a 6-digit OTP will be emailed to you.\n\nTransfer PIN:",
+      ""
+    );
+    if (pv === null) return null;
+    return String(pv).trim();
+  })();
+  if (!transferPinFallback) {
+    return;
+  }
+
+  await processTransfer({ transferPin: transferPinFallback });
   } catch (outerErr) {
     console.error("[VT] Submit handler error:", outerErr);
     try {
