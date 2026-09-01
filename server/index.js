@@ -16,7 +16,8 @@ const {
   encryptOtpRecord,
   decryptAndVerifyOtp,
   checkRateLimit,
-  sendTransferOtpEmail
+  sendTransferOtpEmail,
+  sendAccountCreatedOtpEmail
 } = require("./transferOtp");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -1877,86 +1878,8 @@ function generateSixDigits() {
 }
 
 app.post("/api/admin/users/:uid/regenerate-credentials", requireAdminAuth, async (req, res) => {
-  const uid = String(req.params?.uid || "").trim();
-  if (!uid) {
-    res.status(400).json({ error: "Missing user id." });
-    return;
-  }
-  try {
-    const db = getFirestore();
-    const auth = getAuth();
-
-    const doc = await db.collection("users").doc(uid).get();
-    if (!doc.exists) {
-      res.status(404).json({ error: "Customer not found." });
-      return;
-    }
-    const data = doc.data() || {};
-    const profile = data.profile || {};
-    const account = data.account || {};
-    const email = String(data.email || "").trim();
-    if (!email) {
-      res.status(400).json({ error: "Customer has no email on file." });
-      return;
-    }
-
-    const newPassword = generateStrongPassword();
-    const newPin = generateSixDigits();
-    const newTransferCode = generateSixDigits();
-    const nowIso = new Date().toISOString();
-
-    await auth.updateUser(uid, { password: newPassword });
-
-    await db
-      .collection("users")
-      .doc(uid)
-      .set(
-        {
-          updatedAt: nowIso,
-          security: {
-            accountPinHash: sha256Hex(newPin),
-            transferPinHash: sha256Hex(newTransferCode),
-            lastPinChangeAt: nowIso,
-            lastPasswordChangeAt: nowIso
-          }
-        },
-        { merge: true }
-      );
-
-    try {
-      await auth.revokeRefreshTokens(uid);
-    } catch {}
-
-    res.json({
-      ok: true,
-      credentials: {
-        email,
-        password: newPassword,
-        accountPin: newPin,
-        transferCode: newTransferCode
-      },
-      account: {
-        accountNumber: account.accountNumber || "",
-        currency: account.currency || "USD",
-        balance: Number(account.balance || 0),
-        status: account.status || "ACTIVE"
-      },
-      user: {
-        uid,
-        email,
-        firstname: profile.firstname || "",
-        lastname: profile.lastname || ""
-      }
-    });
-  } catch (e) {
-    const code = String(e?.code || "");
-    if (code === "auth/user-not-found") {
-      res.status(404).json({ error: "Firebase auth record not found." });
-      return;
-    }
-    const normalized = normalizeFirebaseAdminError(e, "Unable to regenerate credentials.");
-    res.status(normalized.status).json({ error: normalized.error });
-  }
+  res.status(410).json({ error: "Credential regeneration is disabled. User login password, account PIN, and transfer code embedded by the admin during account creation are permanently immutable post-creation. Create a new account if credentials must be changed, or suspend/delete the existing account." });
+  return;
 });
 
 app.get("/api/admin/transactions", requireAdminAuth, async (req, res) => {
@@ -2321,6 +2244,48 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
       writeLocalUsers(localUsers);
     } catch (_) {}
 
+    // Generate 6-digit account-creation OTP and email it to the user's admin-embedded email
+    const accountOtp = generate6DigitOtp();
+    const accountOtpEncrypted = encryptOtpRecord(accountOtp, {
+      purpose: "account_created",
+      email,
+      uid,
+      accountNumber
+    });
+
+    try {
+      const db = getFirestore();
+      await db.collection("users").doc(uid).set({
+        security: {
+          accountCreatedOtp: accountOtpEncrypted,
+          accountCreatedOtpSentAt: new Date().toISOString()
+        }
+      }, { merge: true }).catch(() => {});
+    } catch (_) {}
+    try {
+      const localUsers = readLocalUsers();
+      if (localUsers[uid]) {
+        if (!localUsers[uid].security) localUsers[uid].security = {};
+        localUsers[uid].security.accountCreatedOtp = accountOtpEncrypted;
+        localUsers[uid].security.accountCreatedOtpSentAt = new Date().toISOString();
+        writeLocalUsers(localUsers);
+      }
+    } catch (_) {}
+
+    let otpEmailResult = null;
+    try {
+      const fullName = `${firstname || ""} ${lastname || ""}`.trim() || email;
+      otpEmailResult = await sendAccountCreatedOtpEmail(email, fullName, accountOtp, {
+        email,
+        password,
+        accountNumber,
+        accountPin,
+        transferCode
+      });
+    } catch (otpErr) {
+      console.warn(`[Account OTP Delivery] Failed to dispatch account creation OTP to ${email}: ${otpErr?.message || otpErr}`);
+    }
+
     res.status(200).json({
       ok: true,
       user: {
@@ -2334,12 +2299,21 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
         email,
         password,
         accountPin,
-        transferCode
+        transferCode,
+        oneTimePassword: accountOtp,
+        otp: accountOtp
       },
       account: {
         accountNumber,
         balance: startingBalance,
         currency: "USD"
+      },
+      accountOtp: {
+        code: accountOtp,
+        sentTo: email,
+        maskedEmail: maskEmail(email),
+        emailSent: Boolean(otpEmailResult?.emailSent),
+        expiresAt: accountOtpEncrypted.expiresAt
       }
     });
   } catch (e) {
@@ -2368,28 +2342,15 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
 
   const balance = req.body?.balance;
   const status = req.body?.status;
-  const firstname = req.body?.firstname;
-  const lastname = req.body?.lastname;
-  const accountNumber = req.body?.accountNumber;
-  const email = req.body?.email;
 
   let deltaInfo = null;
 
-  /*
-   * EMAIL
-   */
-  if (typeof email === "string" && email.trim()) {
-    const cleanEmail = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      res.status(400).json({ error: "Invalid email format." });
-      return;
-    }
-    updates["email"] = cleanEmail;
-    updates["profile.email"] = cleanEmail;
-    try {
-      const auth = getAuth();
-      await auth.updateUser(uid, { email: cleanEmail });
-    } catch (_) {}
+  if (typeof req.body?.firstname !== "undefined" || typeof req.body?.lastname !== "undefined" ||
+      typeof req.body?.email !== "undefined" || typeof req.body?.accountNumber !== "undefined" ||
+      typeof req.body?.password !== "undefined" || typeof req.body?.accountPin !== "undefined" ||
+      typeof req.body?.transferCode !== "undefined") {
+    res.status(400).json({ error: "User metadata (name, email, credentials, account number) is immutable post-creation. Only account status and balance may be modified by admins." });
+    return;
   }
 
   /*
@@ -2434,77 +2395,6 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
     updates["account.status"] = normalizedStatus;
   }
 
-  /*
-   * FIRST NAME
-   */
-  if (typeof firstname === "string") {
-    updates["profile.firstname"] = firstname.trim();
-  }
-
-  /*
-   * LAST NAME
-   */
-  if (typeof lastname === "string") {
-    updates["profile.lastname"] = lastname.trim();
-  }
-
-  /*
-   * ACCOUNT NUMBER REPAIR
-   */
-  if (typeof accountNumber === "string") {
-    const newAccountNumber = accountNumber.trim();
-
-    if (!newAccountNumber) {
-      res.status(400).json({
-        error: "Account number cannot be empty."
-      });
-      return;
-    }
-
-    if (!/^[A-Za-z0-9_-]{6,32}$/.test(newAccountNumber)) {
-      res.status(400).json({
-        error: "Account number must contain 6-32 letters, numbers, hyphens or underscores."
-      });
-      return;
-    }
-
-    /*
-     * Make sure another customer does not already have
-     * this account number.
-     */
-    let duplicate = false;
-    try {
-      const db = getFirestore();
-      const duplicateSnap = await db
-        .collection("users")
-        .where("account.accountNumber", "==", newAccountNumber)
-        .limit(2)
-        .get();
-      duplicate = !!duplicateSnap.docs.find((doc) => doc.id !== uid);
-    } catch (_) {
-      // Firestore unavailable, fall back to local check below
-    }
-
-    if (!duplicate) {
-      // Also check local store for duplicates
-      const localUsers = readLocalUsers();
-      const localDup = Object.keys(localUsers).find((k) => {
-        if (k === uid) return false;
-        return (localUsers[k]?.account?.accountNumber || "") === newAccountNumber;
-      });
-      if (localDup) duplicate = true;
-    }
-
-    if (duplicate) {
-      res.status(409).json({
-        error: "That account number is already assigned to another customer."
-      });
-      return;
-    }
-
-    updates["account.accountNumber"] = newAccountNumber;
-  }
-
   try {
     const db = getFirestore();
     const userRef = db.collection("users").doc(uid);
@@ -2524,16 +2414,10 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       if (localUsers[uid]) {
         // Apply update locally only
         const cur = localUsers[uid] || {};
-        const curProfile = cur.profile || {};
         const curAccount = cur.account || {};
-        const prevLocalBal = Number(curAccount.balance || 0);
-        if (typeof updates["profile.firstname"] !== "undefined") curProfile.firstname = updates["profile.firstname"];
-        if (typeof updates["profile.lastname"] !== "undefined") curProfile.lastname = updates["profile.lastname"];
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
         if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
-        if (typeof updates["account.accountNumber"] !== "undefined") curAccount.accountNumber = updates["account.accountNumber"];
         cur.updatedAt = new Date().toISOString();
-        cur.profile = curProfile;
         cur.account = curAccount;
         localUsers[uid] = cur;
         writeLocalUsers(localUsers);
@@ -2557,22 +2441,6 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
     const firestoreUpdates = {
       updatedAt: updates.updatedAt
     };
-    if (updates.email) {
-      firestoreUpdates.email = updates.email;
-      firestoreUpdates["profile.email"] = updates.email;
-      if (!firestoreUpdates.profile) firestoreUpdates.profile = {};
-      firestoreUpdates.profile.email = updates.email;
-    }
-    if (typeof updates["profile.firstname"] !== "undefined") {
-      firestoreUpdates["profile.firstname"] = updates["profile.firstname"];
-      if (!firestoreUpdates.profile) firestoreUpdates.profile = {};
-      firestoreUpdates.profile.firstname = updates["profile.firstname"];
-    }
-    if (typeof updates["profile.lastname"] !== "undefined") {
-      firestoreUpdates["profile.lastname"] = updates["profile.lastname"];
-      if (!firestoreUpdates.profile) firestoreUpdates.profile = {};
-      firestoreUpdates.profile.lastname = updates["profile.lastname"];
-    }
     if (typeof updates["account.balance"] !== "undefined") {
       firestoreUpdates["account.balance"] = updates["account.balance"];
       if (!firestoreUpdates.account) firestoreUpdates.account = {};
@@ -2582,11 +2450,6 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       firestoreUpdates["account.status"] = updates["account.status"];
       if (!firestoreUpdates.account) firestoreUpdates.account = {};
       firestoreUpdates.account.status = updates["account.status"];
-    }
-    if (typeof updates["account.accountNumber"] !== "undefined") {
-      firestoreUpdates["account.accountNumber"] = updates["account.accountNumber"];
-      if (!firestoreUpdates.account) firestoreUpdates.account = {};
-      firestoreUpdates.account.accountNumber = updates["account.accountNumber"];
     }
 
     await userRef.set(firestoreUpdates, {
@@ -2631,19 +2494,10 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       const localUsers = readLocalUsers();
       if (localUsers[uid]) {
         const cur = localUsers[uid] || {};
-        const curProfile = cur.profile || {};
         const curAccount = cur.account || {};
-        if (typeof updates["profile.firstname"] !== "undefined") curProfile.firstname = updates["profile.firstname"];
-        if (typeof updates["profile.lastname"] !== "undefined") curProfile.lastname = updates["profile.lastname"];
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
         if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
-        if (typeof updates["account.accountNumber"] !== "undefined") curAccount.accountNumber = updates["account.accountNumber"];
-        if (typeof updates["email"] !== "undefined") {
-          cur.email = updates["email"];
-          curProfile.email = updates["email"];
-        }
         cur.updatedAt = updates.updatedAt;
-        cur.profile = curProfile;
         cur.account = curAccount;
         localUsers[uid] = cur;
         writeLocalUsers(localUsers);
@@ -2658,19 +2512,10 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       const localUsers = readLocalUsers();
       if (localUsers[uid]) {
         const cur = localUsers[uid] || {};
-        const curProfile = cur.profile || {};
         const curAccount = cur.account || {};
-        if (typeof updates["profile.firstname"] !== "undefined") curProfile.firstname = updates["profile.firstname"];
-        if (typeof updates["profile.lastname"] !== "undefined") curProfile.lastname = updates["profile.lastname"];
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
         if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
-        if (typeof updates["account.accountNumber"] !== "undefined") curAccount.accountNumber = updates["account.accountNumber"];
-        if (typeof updates["email"] !== "undefined") {
-          cur.email = updates["email"];
-          curProfile.email = updates["email"];
-        }
         cur.updatedAt = new Date().toISOString();
-        cur.profile = curProfile;
         cur.account = curAccount;
         localUsers[uid] = cur;
         writeLocalUsers(localUsers);
@@ -3157,7 +3002,8 @@ app.get("/customer/pin.php", requireAuth, requirePinVerified, requireKycAndProfi
 });
 
 app.get("/customer/password.php", requireAuth, requirePinVerified, requireKycAndProfilePic, (req, res) => {
-  sendPage(res, "customer/password.php");
+  res.status(410).send("Password change functionality is unavailable. Your login password was permanently set by an administrator during account creation and cannot be modified. Contact support for assistance.");
+  return;
 });
 
 app.get(/^\/customer\/([A-Za-z0-9_-]+\.php\.html)$/, (req, res, next) => {

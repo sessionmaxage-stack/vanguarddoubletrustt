@@ -272,6 +272,137 @@ async function sendTransferOtpEmail(recipientEmail, recipientName, otp, transfer
   };
 }
 
+/**
+ * Dispatches a one-time password (OTP) + account credentials email when
+ * an administrator creates a new customer account. The OTP is the
+ * verification code the customer will use on first login.
+ */
+async function sendAccountCreatedOtpEmail(recipientEmail, recipientName, otpCode, credentials = {}) {
+  const cleanEmail = String(recipientEmail || "").trim().toLowerCase();
+  const cleanName = String(recipientName || "Customer").trim();
+  const otp = String(otpCode || "").trim();
+
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    throw new Error("Recipient email address is invalid - cannot dispatch account creation OTP.");
+  }
+  if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+    throw new Error("Invalid OTP code generated for account creation email.");
+  }
+
+  const masked = maskEmail(cleanEmail);
+  const accountNumber = String(credentials.accountNumber || "").trim();
+  const loginEmail = String(credentials.email || cleanEmail).trim();
+  const loginPassword = String(credentials.password || "").trim();
+  const accountPin = String(credentials.accountPin || "").trim();
+  const transferCode = String(credentials.transferCode || "").trim();
+
+  console.log(`[Account OTP Delivery] Dispatching account creation OTP [${otp}] to email: ${cleanEmail} (${masked}) for ${cleanName}. Account: ${accountNumber || "N/A"}. Expiration: 15 minutes.`);
+
+  let emailSent = false;
+  const transporter = getMailTransporter();
+  if (transporter) {
+    try {
+      const fromAddr = process.env.SMTP_FROM || process.env.MAIL_FROM || `"VanguardDoubleTrust Accounts" <${process.env.SMTP_USER || "accounts@vanguarddoubletrust.com"}>`;
+
+      const credentialsHtml = `
+        <div style="margin: 20px 0 24px; padding: 18px 20px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <div style="font-size: 12px; font-weight: 700; color: #475569; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px;">Your Account Credentials</div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; width: 40%;">Login Email</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 600; word-break: break-all;">${loginEmail}</td>
+            </tr>
+            ${loginPassword ? `<tr>
+              <td style="padding: 6px 0; color: #64748b;">Login Password</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 600; font-family: Consolas, 'Courier New', monospace;">${loginPassword}</td>
+            </tr>` : ""}
+            ${accountNumber ? `<tr>
+              <td style="padding: 6px 0; color: #64748b;">Account Number</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 600; font-family: Consolas, 'Courier New', monospace;">${accountNumber}</td>
+            </tr>` : ""}
+            ${accountPin ? `<tr>
+              <td style="padding: 6px 0; color: #64748b;">Account PIN</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 600; letter-spacing: 2px;">${accountPin}</td>
+            </tr>` : ""}
+            ${transferCode ? `<tr>
+              <td style="padding: 6px 0; color: #64748b;">Transfer Code</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 600; letter-spacing: 2px;">${transferCode}</td>
+            </tr>` : ""}
+          </table>
+        </div>
+      `;
+
+      const htmlBody = `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.05em;">VanguardDoubleTrust</h1>
+            <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.85;">Welcome to Your New Banking Dashboard</p>
+          </div>
+          <div style="padding: 32px 24px; color: #1e293b;">
+            <h2 style="font-size: 18px; font-weight: 700; margin-top: 0; color: #0f172a;">Your Account Has Been Created</h2>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              Hello <strong>${cleanName}</strong>,<br>
+              A VanguardDoubleTrust account has been created for you by an authorized administrator. Please use the following one-time password (OTP) verification code to confirm your identity on first login.
+            </p>
+            <div style="margin: 24px 0; padding: 20px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; text-align: center;">
+              <div style="font-size: 12px; font-weight: 700; color: #64748b; letter-spacing: 0.1em; text-transform: uppercase;">Your One-Time Password (OTP)</div>
+              <div style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #0f172a; margin: 10px 0;">${otp}</div>
+              <div style="font-size: 12px; color: #dc2626; font-weight: 600;">Valid for 15 minutes only</div>
+            </div>
+            ${credentialsHtml}
+            <p style="font-size: 13px; line-height: 1.5; color: #64748b; margin-top: 16px;">
+              For your security, credentials embedded by the administrator (including login password) are permanent and cannot be changed after account creation. If you experience any difficulty accessing your account, please contact your VanguardDoubleTrust account administrator directly.
+            </p>
+          </div>
+          <div style="background: #f1f5f9; padding: 16px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+            &copy; ${new Date().getFullYear()} VanguardDoubleTrust. All rights reserved. Secure Banking Services.
+          </div>
+        </div>
+      `;
+
+      const textBody = [
+        `Welcome to VanguardDoubleTrust, ${cleanName}!`,
+        "",
+        `Your one-time password (OTP) for first-login verification: ${otp}`,
+        "(Valid for 15 minutes only.)",
+        "",
+        loginPassword ? `Login Password: ${loginPassword}` : "",
+        accountNumber ? `Account Number: ${accountNumber}` : "",
+        accountPin ? `Account PIN: ${accountPin}` : "",
+        transferCode ? `Transfer Code: ${transferCode}` : "",
+        "",
+        "Log in at: /customer/login.php.html",
+        "",
+        "Credentials embedded by the admin are permanent and immutable post-creation.",
+        "",
+        "- VanguardDoubleTrust Security",
+      ].filter(Boolean).join("\n");
+
+      await transporter.sendMail({
+        from: fromAddr,
+        to: cleanEmail,
+        subject: `[VanguardDoubleTrust] Your New Account OTP: ${otp}`,
+        text: textBody,
+        html: htmlBody
+      });
+      emailSent = true;
+      console.log(`[Account OTP Delivery] Live email successfully transmitted to ${cleanEmail}`);
+    } catch (mailErr) {
+      console.warn(`[Account OTP Delivery] SMTP transmission warning: ${mailErr.message}`);
+    }
+  }
+
+  return {
+    delivered: true,
+    emailSent,
+    recipient: cleanEmail,
+    maskedEmail: masked,
+    otp,
+    expiresInMinutes: 15,
+    timestamp: new Date().toISOString()
+  };
+}
+
 module.exports = {
   OTP_TTL_MS,
   MAX_DAILY_REQUESTS,
@@ -281,5 +412,6 @@ module.exports = {
   encryptOtpRecord,
   decryptAndVerifyOtp,
   checkRateLimit,
-  sendTransferOtpEmail
+  sendTransferOtpEmail,
+  sendAccountCreatedOtpEmail
 };

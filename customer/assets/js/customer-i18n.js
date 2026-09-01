@@ -3845,9 +3845,32 @@
       : document;
     const profile = (userProfileOrMe && typeof userProfileOrMe === "object") ? userProfileOrMe : {};
     const nestedProfile = (profile.profile && typeof profile.profile === "object") ? profile.profile : {};
-    const profilePic = "";
+    const nestedSecurity = (profile.security && typeof profile.security === "object") ? profile.security : {};
+    const profilePic =
+      (typeof profile.profilePic === "string" ? profile.profilePic : "") ||
+      (typeof profile.photoURL === "string" ? profile.photoURL : "") ||
+      (typeof profile.photo === "string" ? profile.photo : "") ||
+      (typeof profile.avatar === "string" ? profile.avatar : "") ||
+      (typeof nestedProfile.profilePic === "string" ? nestedProfile.profilePic : "") ||
+      (typeof nestedProfile.photoURL === "string" ? nestedProfile.photoURL : "") ||
+      (typeof nestedProfile.photo === "string" ? nestedProfile.photo : "") ||
+      (typeof nestedProfile.avatar === "string" ? nestedProfile.avatar : "") ||
+      (typeof nestedSecurity.profilePic === "string" ? nestedSecurity.profilePic : "") ||
+      (typeof nestedSecurity.photoURL === "string" ? nestedSecurity.photoURL : "") ||
+      (typeof nestedSecurity.photo === "string" ? nestedSecurity.photo : "") ||
+      (typeof nestedSecurity.avatar === "string" ? nestedSecurity.avatar : "") || "";
     const email = String(profile.email || nestedProfile.email || "").trim();
     const initials = getInitialsFromProfile(profile, email);
+    const trimmedPic = typeof profilePic === "string" ? profilePic.trim() : "";
+    let safePicUrl = "";
+    if (trimmedPic && (
+        /^https?:\/\//i.test(trimmedPic) ||
+        /^\/\//i.test(trimmedPic) ||
+        /^data:image\//i.test(trimmedPic) ||
+        /^\//.test(trimmedPic)
+      )) {
+      safePicUrl = trimmedPic;
+    }
 
     const avatarSelectors = [
       "#avatarInitials",
@@ -3862,19 +3885,54 @@
         const nodes = root.querySelectorAll(sel);
         if (!nodes || !nodes.length) return;
         nodes.forEach(function(el){
-          if (!el || el.dataset && el.dataset.vtAvatarHandled === "initials") return;
-          try { el.dataset.vtAvatarHandled = "initials"; } catch (_) {}
-          const toRemove = el.querySelectorAll ? el.querySelectorAll("img.vt-avatar-image") : [];
-          for (let i = 0; i < toRemove.length; i++) {
-            try { toRemove[i].remove(); } catch (_) {}
+          if (!el || (el.dataset && el.dataset.vtAvatarHandled === "initials")) {
+            if (safePicUrl && el.dataset && el.dataset.vtAvatarHandled === "initials") {
+              delete el.dataset.vtAvatarHandled;
+            } else if (el.dataset && el.dataset.vtAvatarHandled) {
+              return;
+            }
           }
-          try { el.textContent = initials || "VT"; } catch (_) {}
-          try {
-            el.style.background = "";
-            el.style.color = "";
-            el.style.backgroundImage = "";
-            el.style.padding = "";
-          } catch (_) {}
+          const existingImgs = el.querySelectorAll ? el.querySelectorAll("img.vt-avatar-image") : [];
+          for (let i = 0; i < existingImgs.length; i++) {
+            try { existingImgs[i].remove(); } catch (_) {}
+          }
+          if (safePicUrl) {
+            try { el.dataset.vtAvatarHandled = "image"; } catch (_) {}
+            const img = document.createElement("img");
+            img.className = "vt-avatar-image";
+            img.src = safePicUrl;
+            img.alt = initials || "User Avatar";
+            img.onerror = function() {
+              try {
+                if (img.parentNode) img.parentNode.removeChild(img);
+                if (el) {
+                  el.textContent = initials || "VT";
+                  try { el.style.background = ""; } catch (_) {}
+                  try { el.style.color = ""; } catch (_) {}
+                  try { el.style.backgroundImage = ""; } catch (_) {}
+                  try { el.style.padding = ""; } catch (_) {}
+                }
+              } catch (_) {}
+            };
+            try {
+              img.style.cssText = "width:100%;height:100%;object-fit:cover;object-position:center;display:block;border-radius:inherit;pointer-events:none;";
+              el.style.background = "transparent";
+              el.style.backgroundImage = "none";
+              el.style.padding = "0";
+              el.style.color = "transparent";
+              el.textContent = "";
+              el.appendChild(img);
+            } catch (_) {}
+          } else {
+            try { el.dataset.vtAvatarHandled = "initials"; } catch (_) {}
+            try { el.textContent = initials || "VT"; } catch (_) {}
+            try {
+              el.style.background = "";
+              el.style.color = "";
+              el.style.backgroundImage = "";
+              el.style.padding = "";
+            } catch (_) {}
+          }
           processed++;
         });
       } catch (_) {}
@@ -4923,6 +4981,27 @@
     applyLanguageToDocument(lang, document);
     try { applyAvatarImages(document, me || {}); } catch (_) {}
 
+    function resolveProfilePicUrl(obj) {
+      if (!obj || typeof obj !== "object") return "";
+      const p = obj.profile || {};
+      const s = obj.security || {};
+      return String(
+        (typeof obj.profilePic === "string" ? obj.profilePic : "") ||
+        (typeof obj.photoURL === "string" ? obj.photoURL : "") ||
+        (typeof obj.photo === "string" ? obj.photo : "") ||
+        (typeof obj.avatar === "string" ? obj.avatar : "") ||
+        (typeof p.profilePic === "string" ? p.profilePic : "") ||
+        (typeof p.photoURL === "string" ? p.photoURL : "") ||
+        (typeof p.photo === "string" ? p.photo : "") ||
+        (typeof p.avatar === "string" ? p.avatar : "") ||
+        (typeof s.profilePic === "string" ? s.profilePic : "") ||
+        (typeof s.photoURL === "string" ? s.photoURL : "") ||
+        (typeof s.photo === "string" ? s.photo : "") ||
+        (typeof s.avatar === "string" ? s.avatar : "") || ""
+      ).trim();
+    }
+    const actualProfilePic = resolveProfilePicUrl(me || {});
+
     function maybeRunAfter(finalMe, finalLanguage, extras) {
       if (options && typeof options.after === "function") {
         try {
@@ -4931,11 +5010,11 @@
               me: finalMe,
               language: finalLanguage,
               kycCompleted: true,
-              picUploaded: true,
-              profilePicUploaded: true,
+              picUploaded: !!actualProfilePic,
+              profilePicUploaded: !!actualProfilePic,
               profilePicPrompted: false,
-              profilePic: "",
-              photoURL: ""
+              profilePic: actualProfilePic,
+              photoURL: actualProfilePic
             },
             extras || {}
           ));
@@ -4944,8 +5023,8 @@
     }
 
     return new Promise((resolve) => {
-      maybeRunAfter(me || {}, lang, { profilePicPrompted: false });
-      resolve({ me: me || {}, language: lang, kycCompleted: true, profilePicPrompted: false, kycGateSkipped: true, picGateSkipped: true });
+      maybeRunAfter(me || {}, lang, { profilePicPrompted: false, profilePic: actualProfilePic, photoURL: actualProfilePic });
+      resolve({ me: me || {}, language: lang, kycCompleted: true, profilePicPrompted: false, profilePic: actualProfilePic, photoURL: actualProfilePic, kycGateSkipped: true, picGateSkipped: true });
     });
   }
 
