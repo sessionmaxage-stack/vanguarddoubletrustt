@@ -3023,25 +3023,15 @@
           body: JSON.stringify(requestBody)
         }).then(function(res) {
           if (res && res.ok) {
-            var codeHint = String(res.otp || res.code || "").trim();
             var maskedEmail = String(res.maskedEmail || "your registered email").trim();
             toast(res.message || "Verification code dispatched to " + maskedEmail + ".", "info");
 
             if (hasSwal) {
-              var codeBanner = codeHint ?
-                '<div style="margin:14px auto 8px;padding:12px 18px;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:12px;text-align:center;">' +
-                '<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:1px;">Your Transfer OTP Code</div>' +
-                '<div style="font-size:28px;font-weight:900;letter-spacing:6px;color:#1e3a8a;margin:4px 0;">' + codeHint + '</div>' +
-                '<div style="font-size:11px;color:#64748b;">(Generated for ' + maskedEmail + ')</div>' +
-                '</div>' :
-                '';
               window.Swal.fire({
                 title: "Email Verification Code",
                 html: 'A 6-digit One-Time Password (OTP) has been dispatched for <strong>' + maskedEmail + '</strong>.' +
-                  codeBanner +
                   '<small class="text-muted" style="display:block;margin-top:8px;">Code expires in 15 minutes. Enter the 6-digit code below to authorize this transfer.</small>',
                 input: "text",
-                inputValue: codeHint || "",
                 inputAttributes: {
                   maxlength: "6",
                   inputmode: "numeric",
@@ -3073,10 +3063,8 @@
               return;
             }
 
-            var promptMsg = "A 6-digit verification code has been dispatched for " + maskedEmail + " (valid for 15 mins)." +
-              (codeHint ? "\n\nYour OTP Code: " + codeHint : "") +
-              "\n\nEnter the 6-digit code to authorize this transfer:";
-            var promptVal = window.prompt(promptMsg, codeHint || "");
+            var promptMsg = "Enter the 6-digit verification code sent to " + maskedEmail + " (valid for 15 mins):";
+            var promptVal = window.prompt(promptMsg, "");
             if (promptVal && /^\d{6}$/.test(String(promptVal).trim())) {
               var entered = String(promptVal).trim();
               if (codeInput) codeInput.value = entered;

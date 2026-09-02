@@ -1517,8 +1517,6 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
         ? "Transfer PIN verified. A 6-digit verification code has been sent to your registered email address."
         : "Transfer PIN verified. A 6-digit verification code has been dispatched.",
       maskedEmail: maskEmail(senderEmail),
-      otp: rawOtp,
-      code: rawOtp,
       emailSent: Boolean(sendResult.emailSent),
       emailDelivered: Boolean(sendResult.delivered),
       expiresAt: encryptedRecord.expiresAt,
@@ -2373,9 +2371,7 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
         email,
         password,
         accountPin,
-        transferCode,
-        oneTimePassword: accountOtp,
-        otp: accountOtp
+        transferCode
       },
       account: {
         accountNumber,
@@ -2383,7 +2379,6 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
         currency: "USD"
       },
       accountOtp: {
-        code: accountOtp,
         sentTo: email,
         maskedEmail: maskEmail(email),
         emailSent: Boolean(otpEmailResult?.emailSent),
