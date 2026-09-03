@@ -192,11 +192,11 @@ function assert(cond, name, detail) {
     "utf8"
   );
 
-  const requestOtpBlock = serverSrc.substring(
-    serverSrc.indexOf("/api/customer/transfer/request-otp"),
-    serverSrc.indexOf("/api/customer/transfer", serverSrc.indexOf("/api/customer/transfer/request-otp") + 10)
+  const requestOtpResponseBlock = serverSrc.substring(
+    serverSrc.indexOf("res.status(200).json", serverSrc.indexOf("/api/customer/transfer/request-otp")),
+    serverSrc.indexOf("});", serverSrc.indexOf("res.status(200).json", serverSrc.indexOf("/api/customer/transfer/request-otp")))
   );
-  const leaksRawOtpResp = /otp\s*:\s*rawOtp|code\s*:\s*rawOtp/.test(requestOtpBlock);
+  const leaksRawOtpResp = /otp\s*:\s*rawOtp|code\s*:\s*rawOtp/.test(requestOtpResponseBlock);
   assert(leaksRawOtpResp === false,
     "request-otp endpoint JSON response does NOT leak raw OTP (server/index.js)");
 

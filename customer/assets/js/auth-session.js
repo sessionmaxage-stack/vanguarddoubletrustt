@@ -529,7 +529,7 @@
             await window.firebase.auth().signOut();
           }
         } catch (_) {}
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
       }
     });
 
@@ -601,7 +601,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
       if (me?.pinVerified) {
@@ -692,7 +692,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -700,7 +700,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -738,7 +738,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -746,7 +746,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -790,6 +790,8 @@
   }
 
   function balanceFromMe(me) {
+    const avail = Number(me?.account?.availableBalance);
+    if (Number.isFinite(avail) && avail >= 0) return avail;
     const n = Number(me?.account?.balance);
     return Number.isFinite(n) && n >= 0 ? n : 0;
   }
@@ -908,7 +910,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -1034,7 +1036,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -1075,7 +1077,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -1152,7 +1154,7 @@
   const me = await getMe();
 
   if (!me) {
-    window.location.href = "/customer/login.php.html";
+    window.location.href = "/customer/login.php";
     return;
   }
 
@@ -1363,18 +1365,25 @@
        * and credited the recipient's balance.
        */
       const newBalance = Number(data.newBalance);
+      const newAvail = Number(data.newAvailableBalance);
       const reference = String(data.reference || "");
+      const displayBalance = Number.isFinite(newAvail) && newAvail >= 0 ? newAvail : newBalance;
 
-      if (Number.isFinite(newBalance)) {
+      if (Number.isFinite(displayBalance)) {
         if (balEl) {
-          balEl.textContent = formatMoney(newBalance);
+          balEl.textContent = formatMoney(displayBalance);
         }
 
         if (!me.account) {
           me.account = {};
         }
 
-        me.account.balance = newBalance;
+        if (Number.isFinite(newBalance)) {
+          me.account.balance = newBalance;
+        }
+        if (Number.isFinite(newAvail)) {
+          me.account.availableBalance = newAvail;
+        }
       }
 
       /*
@@ -1423,10 +1432,10 @@
           value: dateStr
         });
 
-        if (Number.isFinite(newBalance)) {
+        if (Number.isFinite(displayBalance)) {
           detailRows.push({
             label: "Available Balance:",
-            value: currency + " " + formatMoney(newBalance).replace(/^[^\d]*/, "")
+            value: currency + " " + formatMoney(displayBalance).replace(/^[^\d]*/, "")
           });
         }
 
@@ -1603,7 +1612,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -1660,7 +1669,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -1794,7 +1803,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -1866,7 +1875,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -1906,7 +1915,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -1994,7 +2003,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -2083,7 +2092,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -2177,7 +2186,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -2264,7 +2273,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -2308,7 +2317,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -2559,7 +2568,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
 
@@ -2601,7 +2610,7 @@
               await window.firebase.auth().signOut();
             }
           } catch (_) {}
-          window.location.href = "/customer/login.php.html";
+          window.location.href = "/customer/login.php";
         }
       });
     }
@@ -2609,7 +2618,7 @@
     (async () => {
       const me = await getMe();
       if (!me) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
         return;
       }
       const el = document.getElementById("meJson");
@@ -2625,7 +2634,7 @@
     const after = typeof o.after === "function" ? o.after : null;
     const me = await getMe();
     if (!me) {
-      window.location.href = "/customer/login.php.html";
+      window.location.href = "/customer/login.php";
       throw new Error("Not authenticated");
     }
     const prof = (me && me.profile) ? me.profile : {};

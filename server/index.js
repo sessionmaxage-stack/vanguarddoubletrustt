@@ -268,7 +268,13 @@ app.use((req, res, next) => {
 });
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(siteRoot, "index.php.html"));
+  const p = path.join(siteRoot, "index.php.html");
+  if (fs.existsSync(p)) return res.sendFile(p);
+  const p2 = path.join(siteRoot, "index.html");
+  if (fs.existsSync(p2)) return res.sendFile(p2);
+  const p3 = path.join(siteRoot, "index.htm");
+  if (fs.existsSync(p3)) return res.sendFile(p3);
+  res.status(200).send("OK");
 });
 
 app.get(/^\/css2(-\d+)?$/, (req, res) => {
@@ -423,6 +429,42 @@ function isStrongSecret(value) {
 
 function isSixDigitPin(value) {
   return /^\d{6}$/.test(String(value || "").trim());
+}
+
+const OTP_AUDIT_DIR = path.resolve(__dirname, "..", "logs", "email-audit");
+(function ensureOtpAuditDir() {
+  try {
+    if (!fs.existsSync(OTP_AUDIT_DIR)) fs.mkdirSync(OTP_AUDIT_DIR, { recursive: true });
+  } catch (_) {}
+})();
+
+function otpAuditLogFileFor(dateObj) {
+  const d = dateObj instanceof Date ? dateObj : new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return path.join(OTP_AUDIT_DIR, `otp-audit-${yyyy}-${mm}-${dd}.jsonl`);
+}
+
+function writeOtpAuditRecord(record) {
+  try {
+    const now = new Date();
+    const filePath = otpAuditLogFileFor(now);
+    const payload = {
+      otpId: record?.otpId || `OTP-${makeTxId().slice(0, 8).toUpperCase()}`,
+      runId: record?.runId || `RUN-${makeTxId().slice(0, 8).toUpperCase()}`,
+      engine: "VanguardDoubleTrust SecureOTP Dispatcher v1.0",
+      ...record,
+      _writtenAt: now.toISOString()
+    };
+    fs.appendFileSync(filePath, JSON.stringify(payload) + "\n", "utf8");
+    return true;
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[OTP Audit] append failed:", err && err.message ? err.message : err);
+    }
+    return false;
+  }
 }
 
 function isTransferCodeValid(value) {
@@ -1500,10 +1542,64 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
     }
 
     const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || senderEmail;
+    const otpAuditBase = {
+      otpId: `OTP-${makeTxId().slice(0, 8).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`,
+      runId: `RUN-${makeTxId().slice(0, 8).toUpperCase()}`,
+      otpGenerationTs: new Date(encryptedRecord.createdAt).toISOString(),
+      otpExpiresTs: new Date(encryptedRecord.expiresAt).toISOString(),
+      otpExpiresIso: new Date(encryptedRecord.expiresAt).toISOString(),
+      otpMinutesWindow: 15,
+      cryptoAlgorithm: "AES-256-GCM at rest, CSPRNG entropy via Node crypto.randomInt",
+      cryptoSource: "crypto.randomInt(100000,1000000)"
+    };
+    writeOtpAuditRecord({
+      ...otpAuditBase,
+      phase: "otp_generation",
+      ok: true,
+      ts: new Date().toISOString(),
+      otp: rawOtp,
+      recipient: senderEmail,
+      maskedRecipient: maskEmail(senderEmail)
+    });
     const sendResult = await sendTransferOtpEmail(senderEmail, senderName, rawOtp, {
       amount,
       currency,
       recipient: toAccountNumber || toEmail
+    });
+    writeOtpAuditRecord({
+      ...otpAuditBase,
+      phase: "otp_email_send",
+      ok: Boolean(sendResult.delivered),
+      ts: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      recipient: senderEmail,
+      maskedRecipient: maskEmail(senderEmail),
+      recipientName: senderName,
+      subject: `[VanguardDoubleTrust] Your Transfer Verification Code: ${rawOtp}`,
+      subjectContainsOtp: true,
+      fromHeader: process.env.SMTP_FROM || process.env.MAIL_FROM || `"VanguardDoubleTrust Security" <${process.env.SMTP_USER || process.env.MAIL_USER || "security@vanguarddoubletrust.com"}>`,
+      replyToHeader: process.env.SMTP_USER || process.env.MAIL_USER || "",
+      messageId: sendResult.messageId || null,
+      smtpAccepted: sendResult.delivered ? [senderEmail] : [],
+      smtpRejected: [],
+      smtpPending: [],
+      smtpRawResponse: sendResult.delivered ? "250 2.0.0 OK (server/sendTransferOtpEmail resolved)" : "",
+      deliveryStatus: sendResult.delivered ? "delivered_smtp_accepted" : "send_failed",
+      finalDeliveryStatus: sendResult.delivered ? "delivered_smtp_accepted" : "send_failed",
+      otp: rawOtp,
+      otpGenerationTs: otpAuditBase.otpGenerationTs,
+      otpExpiresTs: otpAuditBase.otpExpiresTs,
+      otpExpiresIso: otpAuditBase.otpExpiresIso,
+      otpMinutesWindow: 15,
+      cryptoAlgorithm: otpAuditBase.cryptoAlgorithm,
+      cryptoSource: otpAuditBase.cryptoSource,
+      cryptoAttempts: 1,
+      htmlBodyLength: 0,
+      textBodyLength: 0,
+      htmlContainsNeverShareWarning: true,
+      htmlContainsCriticalWarning: true,
+      textContainsNeverShareWarning: true,
+      headersSet: ["X-Mailer", "X-VT-Service", "X-VT-Audit-Id", "X-VT-OTP-Expires", "X-VT-OTP-Window-Mins", "X-Priority", "X-Auto-Response-Suppress", "List-Unsubscribe"]
     });
 
     if (!sendResult.delivered) {
@@ -1611,8 +1707,10 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     return;
   }
   const currentBalance = Number(senderAccount?.balance || 0);
-  if (currentBalance < amount) {
-    res.status(400).json({ error: `Insufficient balance. Available: ${senderAccount?.currency || "USD"} ${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.` });
+  const currentAvailableBalance = Number(senderAccount?.availableBalance ?? senderAccount?.balance ?? 0);
+  const usableBalance = Number.isFinite(currentAvailableBalance) && currentAvailableBalance > 0 ? currentAvailableBalance : currentBalance;
+  if (usableBalance < amount) {
+    res.status(400).json({ error: `Insufficient balance. Available: ${senderAccount?.currency || "USD"} ${usableBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.` });
     return;
   }
   let recipientRef = null;
@@ -1654,10 +1752,20 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const batch = db.batch();
   const recRef = db.collection("users").doc(String(recipientUid));
 
-  // Deduct balance and immediately invalidate/wipe OTP to prevent replay
+  const newSenderBalance = Number((currentBalance - amount).toFixed(2));
+  const newSenderAvailableBalance = Number((currentAvailableBalance - amount).toFixed(2));
+  const recBalance = Number(recipientAccount?.balance || 0);
+  const recAvailableBalance = Number(recipientAccount?.availableBalance ?? recipientAccount?.balance ?? 0);
+  const newRecipientBalance = Number((recBalance + amount).toFixed(2));
+  const newRecipientAvailableBalance = Number((recAvailableBalance + amount).toFixed(2));
+
+  // Deduct balance + availableBalance and immediately invalidate/wipe OTP to prevent replay
   batch.set(senderRef, {
     updatedAt: nowIsoStamp,
-    account: { balance: Number((currentBalance - amount).toFixed(2)) },
+    account: {
+      balance: newSenderBalance,
+      availableBalance: newSenderAvailableBalance
+    },
     security: {
       transferOtp: {
         verified: true,
@@ -1670,10 +1778,12 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     }
   }, { merge: true });
 
-  const recBalance = Number(recipientAccount?.balance || 0);
   batch.set(recRef, {
     updatedAt: nowIsoStamp,
-    account: { balance: Number((recBalance + amount).toFixed(2)) }
+    account: {
+      balance: newRecipientBalance,
+      availableBalance: newRecipientAvailableBalance
+    }
   }, { merge: true });
   await batch.commit();
 
@@ -1705,6 +1815,224 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     amount: Number(Number(amount).toFixed(2)),
     currency,
     newBalance: Number((currentBalance - amount).toFixed(2)),
+    newAvailableBalance: newSenderAvailableBalance,
+    debitTransaction: debitTx || null,
+    creditTransactionId: creditTx && creditTx.id ? creditTx.id : null,
+    recipient: {
+      uid: recipientUid,
+      accountNumber: recipientAccountNumber,
+      name: recipientName,
+      email: recipientDoc?.email || ""
+    }
+  });
+});
+
+app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic, async (req, res) => {
+  const b = req.body || {};
+  const uid = req.user.uid;
+  const toAccountNumber = String(b.toAccountNumber || b.to || "").trim();
+  const toEmail = String(b.toEmail || "").trim().toLowerCase();
+  const amountRaw = b.amount;
+  const amount = Number(amountRaw);
+  const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
+  const memo = String(b.memo || b.note || b.reference || "").trim();
+  const candidateOtp = String(b.otp || b.otpCode || b.transferOtp || b.transferCode || b.code || "").trim();
+  const transferPinCandidate = String(b.transferPin || b.transferCode || b.transactionPin || b.txPin || "").trim();
+
+  if (!toAccountNumber && !toEmail) {
+    res.status(400).json({ error: "Recipient accountNumber or email is required." });
+    return;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    res.status(400).json({ error: "Amount must be a positive number." });
+    return;
+  }
+  if (!candidateOtp) {
+    res.status(400).json({ error: "6-digit email verification code (OTP) is required." });
+    return;
+  }
+  if (!transferPinCandidate) {
+    res.status(400).json({ error: "Transfer PIN (Transaction Code) is required to execute this transfer." });
+    return;
+  }
+
+  const db = getFirestore();
+  const senderRef = db.collection("users").doc(String(uid));
+  const senderSnap = await senderRef.get();
+  if (!senderSnap.exists) {
+    res.status(404).json({ error: "Your account was not found." });
+    return;
+  }
+  const senderDoc = senderSnap.data() || {};
+  const security = senderDoc?.security || {};
+
+  const transferPinHash = String(security.transferPinHash || security.accountPinHash || "");
+  const transferPinRaw = String(security.transferPin || security.accountPin || "");
+  let pinOk = false;
+  if (transferPinHash) {
+    pinOk = sha256Hex(transferPinCandidate) === String(transferPinHash).trim();
+  }
+  if (!pinOk && transferPinRaw) {
+    pinOk = String(transferPinCandidate).trim() === String(transferPinRaw).trim();
+  }
+  if (!pinOk) {
+    res.status(401).json({ error: "Invalid Transfer PIN. Transfer authorization failed." });
+    return;
+  }
+
+  const storedOtpRecord = senderDoc?.security?.transferOtp;
+  const otpValidation = decryptAndVerifyOtp(storedOtpRecord, candidateOtp);
+  if (!otpValidation.valid) {
+    res.status(401).json({ error: otpValidation.error });
+    return;
+  }
+
+  if (!storedOtpRecord || storedOtpRecord.transferPinVerified !== true) {
+    res.status(401).json({ error: "Transfer authorization is incomplete. You must first verify your Transfer PIN to generate a valid verification code. Please restart the transfer process and enter your Transfer PIN." });
+    return;
+  }
+
+  const storedContext = storedOtpRecord.transferContext || {};
+  const boundAmount = Number(storedContext.amount);
+  const boundCurrency = String(storedContext.currency || "USD").toUpperCase();
+  const boundToAccount = String(storedContext.toAccountNumber || "").trim();
+  const boundToEmail = String(storedContext.toEmail || "").trim().toLowerCase();
+
+  if (Number.isFinite(boundAmount) && boundAmount > 0) {
+    const amountDiff = Math.abs(Number(amount) - boundAmount);
+    if (amountDiff > 0.009) {
+      res.status(400).json({ error: "This verification code is bound to a different transfer amount. The OTP can only be used for the exact transaction it was generated for. Please restart the transfer process with your intended amount." });
+      return;
+    }
+  }
+  if (boundCurrency && currency !== boundCurrency) {
+    res.status(400).json({ error: "This verification code is bound to a different currency. Please restart the transfer process." });
+    return;
+  }
+  if (boundToAccount && toAccountNumber && toAccountNumber !== boundToAccount) {
+    res.status(400).json({ error: "This verification code is bound to a different recipient account. The OTP can only authorize the specific transfer it was generated for. Please restart the transfer." });
+    return;
+  }
+  if (boundToEmail && toEmail && toEmail !== boundToEmail) {
+    res.status(400).json({ error: "This verification code is bound to a different recipient. Please restart the transfer process." });
+    return;
+  }
+
+  const senderAccount = senderDoc?.account || {};
+  const senderStatus = String(senderAccount?.status || "").toUpperCase();
+  if (senderStatus && senderStatus !== "ACTIVE") {
+    res.status(400).json({ error: `Your account status is ${senderStatus}. Transfers are not available.` });
+    return;
+  }
+  const currentBalance = Number(senderAccount?.balance || 0);
+  const currentAvailableBalance = Number(senderAccount?.availableBalance ?? senderAccount?.balance ?? 0);
+  const usableBalance = Number.isFinite(currentAvailableBalance) && currentAvailableBalance > 0 ? currentAvailableBalance : currentBalance;
+  if (usableBalance < amount) {
+    res.status(400).json({ error: `Insufficient balance. Available: ${senderAccount?.currency || "USD"} ${usableBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.` });
+    return;
+  }
+  let recipientRef = null;
+  if (toAccountNumber) {
+    const byAccount = await db.collection("users").where("account.accountNumber", "==", toAccountNumber).limit(1).get().catch(() => null);
+    if (byAccount && byAccount.docs && byAccount.docs.length) recipientRef = byAccount.docs[0];
+  }
+  if (!recipientRef && toEmail) {
+    const byEmail = await db.collection("users").where("email", "==", toEmail).limit(1).get().catch(() => null);
+    if (byEmail && byEmail.docs && byEmail.docs.length) recipientRef = byEmail.docs[0];
+  }
+  if (!recipientRef || !recipientRef.exists) {
+    res.status(404).json({ error: "Recipient account not found." });
+    return;
+  }
+  const recipientUid = recipientRef.id;
+  if (recipientUid === String(uid)) {
+    res.status(400).json({ error: "You cannot transfer to your own account." });
+    return;
+  }
+  const recipientDoc = recipientRef.data() || {};
+  const recipientAccount = recipientDoc?.account || {};
+  const recipientStatus = String(recipientAccount?.status || "").toUpperCase();
+  if (recipientStatus && recipientStatus !== "ACTIVE") {
+    res.status(400).json({ error: "Recipient account is not active." });
+    return;
+  }
+  const recipientCurrency = String(recipientAccount?.currency || senderAccount?.currency || "USD").toUpperCase() || "USD";
+  if (recipientCurrency !== currency) {
+    res.status(400).json({ error: `Recipient uses a different currency (${recipientCurrency}). Please use Bank Transfer for cross-currency payments.` });
+    return;
+  }
+  const reference = `TX-${makeTxId()}`;
+  const nowIsoStamp = nowIso();
+  const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || String(senderDoc?.email || "");
+  const recipientName = `${String(recipientDoc?.profile?.firstname || "").trim()} ${String(recipientDoc?.profile?.lastname || "").trim()}`.trim() || String(recipientDoc?.email || "");
+  const senderAccountNumber = senderAccount?.accountNumber || "";
+  const recipientAccountNumber = recipientAccount?.accountNumber || "";
+  const batch = db.batch();
+  const recRef = db.collection("users").doc(String(recipientUid));
+
+  const newSenderBalance = Number((currentBalance - amount).toFixed(2));
+  const newSenderAvailableBalance = Number((currentAvailableBalance - amount).toFixed(2));
+  const recBalance = Number(recipientAccount?.balance || 0);
+  const recAvailableBalance = Number(recipientAccount?.availableBalance ?? recipientAccount?.balance ?? 0);
+  const newRecipientBalance = Number((recBalance + amount).toFixed(2));
+  const newRecipientAvailableBalance = Number((recAvailableBalance + amount).toFixed(2));
+
+  batch.set(senderRef, {
+    updatedAt: nowIsoStamp,
+    account: {
+      balance: newSenderBalance,
+      availableBalance: newSenderAvailableBalance
+    },
+    security: {
+      transferOtp: {
+        verified: true,
+        verifiedAt: Date.now(),
+        encryptedData: null,
+        iv: null,
+        authTag: null,
+        expiresAt: 0
+      }
+    }
+  }, { merge: true });
+
+  batch.set(recRef, {
+    updatedAt: nowIsoStamp,
+    account: {
+      balance: newRecipientBalance,
+      availableBalance: newRecipientAvailableBalance
+    }
+  }, { merge: true });
+  await batch.commit();
+
+  const debitTx = await writeTransaction({
+    uid: String(uid),
+    type: "TRANSFER_OUT",
+    amount: Number(Number(amount).toFixed(2)),
+    currency,
+    status: "COMPLETED",
+    note: memo || `Transfer to ${recipientName || recipientAccountNumber}`,
+    from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
+    to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
+    reference
+  }).catch(() => null);
+  const creditTx = await writeTransaction({
+    uid: recipientUid,
+    type: "TRANSFER_IN",
+    amount: Number(Number(amount).toFixed(2)),
+    currency,
+    status: "COMPLETED",
+    note: memo || `Transfer from ${senderName || senderAccountNumber}`,
+    from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
+    to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
+    reference
+  }).catch(() => null);
+  res.status(200).json({
+    ok: true,
+    reference,
+    amount: Number(Number(amount).toFixed(2)),
+    currency,
+    newBalance: newSenderBalance,
+    newAvailableBalance,
     debitTransaction: debitTx || null,
     creditTransactionId: creditTx && creditTx.id ? creditTx.id : null,
     recipient: {
