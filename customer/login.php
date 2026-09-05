@@ -379,7 +379,7 @@
                      <a href="#" class="login-link contactLink">Forgot Password?</a>
                   </p>
                   <p class="small text-secondary">
-                     New here? <a href="register.php.html" class="login-link">Create an Account</a>
+                     New here? <a href="register.php" class="login-link">Create an Account</a>
                   </p>
                </div>
                
@@ -387,7 +387,7 @@
          </div>
          
          <div class="text-center mt-4">
-             <a href="../index.php.html" class="text-decoration-none text-secondary small fw-bold"><i class="fas fa-arrow-left me-1"></i> Back to Home</a>
+             <a href="../index.php" class="text-decoration-none text-secondary small fw-bold"><i class="fas fa-arrow-left me-1"></i> Back to Home</a>
              <div class="mt-2 small text-muted">&copy; 2026 VanguardDoubleTrust. All rights reserved.</div>
          </div>
       </div>

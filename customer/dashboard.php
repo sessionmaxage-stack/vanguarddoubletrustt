@@ -2418,7 +2418,7 @@
               })
               .catch(function() {})
               .then(function() {
-                window.location.href = "/customer/login.php.html";
+                window.location.href = "/customer/login.php";
               });
           });
         });

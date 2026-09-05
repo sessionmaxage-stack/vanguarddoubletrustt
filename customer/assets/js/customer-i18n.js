@@ -4971,7 +4971,7 @@
     } catch (err) {
       const str = String(err?.message || "");
       if (/unauthorized|sign in|session ended/i.test(str) || /401|403/.test(str)) {
-        window.location.href = "/customer/login.php.html";
+        window.location.href = "/customer/login.php";
       }
       _vtBootstrapRan = false;
       throw err;
@@ -4980,6 +4980,52 @@
     const lang = (me && me.preferredLanguage) || "en";
     applyLanguageToDocument(lang, document);
     try { applyAvatarImages(document, me || {}); } catch (_) {}
+
+    (function hydrateBalanceElements(){
+      try {
+        if (!me || !document || typeof document.getElementById !== "function") return;
+        const a = me.account || {};
+        const avail = Number(a.availableBalance);
+        const rawBal = Number.isFinite(avail) && avail >= 0 ? avail : (Number.isFinite(Number(a.balance)) && Number(a.balance) >= 0 ? Number(a.balance) : 0);
+        const currency = String(a.currency || "USD").trim().toUpperCase() || "USD";
+        let formatted;
+        try {
+          formatted = rawBal.toLocaleString(undefined, { style: "currency", currency: currency === "USD" || /^[A-Z]{3}$/.test(currency) ? currency : "USD" });
+        } catch (_) {
+          formatted = "$" + rawBal.toFixed(2);
+        }
+        const balanceIds = [
+          "internationalBalance",
+          "dashboardBalance",
+          "heroBalance",
+          "availableBalance",
+          "accountBalance",
+          "stCurrentBalance",
+          "currentBalance"
+        ];
+        for (let i = 0; i < balanceIds.length; i++) {
+          const id = balanceIds[i];
+          const el = document.getElementById(id);
+          if (el && !el.dataset.vtBalanceHydrated) {
+            try {
+              el.textContent = formatted;
+              el.dataset.vtBalanceHydrated = "1";
+            } catch (_) {}
+          }
+        }
+        const balAttrSel = document.querySelectorAll("[data-vt-balance], [data-balance='available']");
+        if (balAttrSel && balAttrSel.forEach) {
+          balAttrSel.forEach(function(el){
+            try {
+              if (!el.dataset.vtBalanceHydrated) {
+                el.textContent = formatted;
+                el.dataset.vtBalanceHydrated = "1";
+              }
+            } catch (_) {}
+          });
+        }
+      } catch (_) {}
+    })();
 
     function resolveProfilePicUrl(obj) {
       if (!obj || typeof obj !== "object") return "";
