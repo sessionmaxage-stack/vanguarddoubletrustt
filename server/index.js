@@ -1360,8 +1360,12 @@ app.get("/api/customer/lookup-account", requireAuth, async (req, res) => {
       if (byAccount && byAccount.docs && byAccount.docs.length) targetDoc = byAccount.docs[0];
     }
     if (!targetDoc && email) {
-      const byEmail = await db.collection("users").doc(email).get().catch(() => null);
-      if (byEmail && byEmail.exists) targetDoc = byEmail;
+      const byEmail = await db.collection("users").where("email", "==", email).limit(1).get().catch(() => null);
+      if (byEmail && byEmail.docs && byEmail.docs.length) targetDoc = byEmail.docs[0];
+      if (!targetDoc) {
+        const byDocId = await db.collection("users").doc(email).get().catch(() => null);
+        if (byDocId && byDocId.exists) targetDoc = byDocId;
+      }
     }
     if (!targetDoc || !targetDoc.exists) {
       res.status(404).json({ error: "Recipient account not found." });
