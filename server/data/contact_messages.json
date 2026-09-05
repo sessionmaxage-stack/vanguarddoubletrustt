@@ -1,5 +1,77 @@
 [
   {
+    "messageId": "MSG-2fc97b98-aec7-4eab-9f44-12f5a44a9cab",
+    "name": "Smoke Test Inquirer",
+    "email": "smoketest_1788626080552@vanguardtest.com",
+    "phone": "",
+    "subject": "General Enquiry",
+    "message": "Baseline smoke test inquiry verifying public contact intake API functionality.",
+    "status": "NEW",
+    "createdAt": "2026-09-05T16:34:40.669Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
+    "messageId": "MSG-41ae74e5-fed6-4936-b4ef-316e789ce3d3",
+    "name": "Smoke Test Inquirer",
+    "email": "smoketest_1788625592844@vanguardtest.com",
+    "phone": "",
+    "subject": "General Enquiry",
+    "message": "Baseline smoke test inquiry verifying public contact intake API functionality.",
+    "status": "NEW",
+    "createdAt": "2026-09-05T16:26:32.846Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
+    "messageId": "MSG-35be2195-8c53-4024-9557-7ea5f612c1f6",
+    "name": "Smoke Test Inquirer",
+    "email": "smoketest_1788625284819@vanguardtest.com",
+    "phone": "",
+    "subject": "General Enquiry",
+    "message": "Baseline smoke test inquiry verifying public contact intake API functionality.",
+    "status": "NEW",
+    "createdAt": "2026-09-05T16:21:24.823Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
+    "messageId": "MSG-7000c19c-56cd-4ed5-9da3-7b4aae8462da",
+    "name": "Smoke Test Inquirer",
+    "email": "smoketest_1788625108960@vanguardtest.com",
+    "phone": "",
+    "subject": "General Enquiry",
+    "message": "Baseline smoke test inquiry verifying public contact intake API functionality.",
+    "status": "NEW",
+    "createdAt": "2026-09-05T16:18:28.963Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
+    "messageId": "MSG-83f60254-48e8-4aa9-9f5d-1f098497a3c5",
+    "name": "Smoke Test Inquirer",
+    "email": "smoketest_1788625006226@vanguardtest.com",
+    "phone": "",
+    "subject": "General Enquiry",
+    "message": "Baseline smoke test inquiry verifying public contact intake API functionality.",
+    "status": "NEW",
+    "createdAt": "2026-09-05T16:16:46.339Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
+    "messageId": "MSG-0c1b592c-2cee-4ba2-b9dd-c72b8c491b2d",
+    "name": "Smoke Test Inquirer",
+    "email": "smoketest_1788624655111@vanguardtest.com",
+    "phone": "",
+    "subject": "General Enquiry",
+    "message": "Baseline smoke test inquiry verifying public contact intake API functionality.",
+    "status": "NEW",
+    "createdAt": "2026-09-05T16:10:55.114Z",
+    "ip": "127.0.0.1",
+    "userAgent": ""
+  },
+  {
     "messageId": "MSG-30f254d0-7e3f-4253-8c29-30ca2c57efa6",
     "name": "Smoke Test Inquirer",
     "email": "smoketest_1788455276428@vanguardtest.com",
