@@ -1158,96 +1158,368 @@
     return;
   }
 
-  const showEmailOtpDialog = async (transferContext) => {
-    let otpResponse = null;
+  const showCombinedPinAndOtpDialog = async (transferContext) => {
+    const context = transferContext || {};
+    const toAccountNumber = String(context.toAccountNumber || "").trim();
+    const toEmail = String(context.toEmail || "").trim().toLowerCase();
+    const amount = Number(context.amount);
+    const currency = String(context.currency || "USD").trim().toUpperCase() || "USD";
+    const memo = String(context.memo || "").trim();
+
     if (hasSwal()) {
-      window.Swal.fire({
-        title: "Sending Verification Code...",
-        text: "Please wait while we send a 6-digit OTP to your registered email address.",
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: false,
-        didOpen: () => {
-          window.Swal.showLoading();
-        }
+      const Swal = window.Swal;
+      return await new Promise((resolve) => {
+        let transferPin = "";
+        let otpSent = false;
+        let sentMaskedEmail = null;
+        let dialogEl = null;
+
+        const renderBody = (opts = {}) => {
+          const sending = Boolean(opts.sending);
+          const sendError = opts.sendError ? String(opts.sendError) : "";
+          const otpValue = opts.otpValue ? String(opts.otpValue) : "";
+          return `
+            <div class="vt-pin-otp-wrap" style="max-width:420px; margin: 0 auto;">
+              <div style="text-align:center; margin-bottom:18px; color:#475569; font-size:14px; line-height:1.6;">
+                Enter your <strong>Transfer PIN</strong> (Transaction Code) below and tap
+                <strong>Send Verification Code</strong>. A 6-digit OTP will be delivered exclusively to your admin-registered email address.
+                After receiving the code, enter it alongside your PIN and tap
+                <strong>Authorize Transfer</strong>.
+              </div>
+
+              <div style="margin-bottom: 14px;">
+                <label for="vt-pin-input" style="display:block; text-align:left; font-size:12px; font-weight:700; color:#475569; letter-spacing:0.05em; text-transform:uppercase; margin-bottom:6px;">
+                  Transfer PIN (Transaction Code)
+                </label>
+                <input
+                  id="vt-pin-input"
+                  type="password"
+                  autocomplete="off"
+                  placeholder="Enter your 6-digit or 8+ character Transfer PIN"
+                  value="${transferPin ? escapeHtml(transferPin) : ""}"
+                  ${otpSent ? " readonly disabled style=\"background:#f1f5f9;\"" : "style=\"text-align:center;letter-spacing:2px;font-size:18px;\""}
+                  class="swal2-input"
+                  style="display:block; width:100%; height:46px; padding:8px 12px; box-sizing:border-box; text-align:center; letter-spacing:2px; font-size:18px; border:1px solid #cbd5e1; border-radius:10px; ${otpSent ? "background:#f1f5f9;" : ""}"
+                />
+              </div>
+
+              ${!otpSent ? "" : `
+                <div style="margin: 14px 0 10px; padding: 12px 14px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; color:#065f46; font-size:13px; line-height:1.6;">
+                  A verification code has been sent to your admin-registered email address:
+                  <strong style="display:inline-block; margin-left:4px;">${escapeHtml(sentMaskedEmail || "your registered email")}</strong>
+                  <small style="display:block; margin-top:4px; color:#047857;">Code valid for 15 minutes. Check your inbox (and spam folder).</small>
+                </div>
+                <div>
+                  <label for="vt-otp-input" style="display:block; text-align:left; font-size:12px; font-weight:700; color:#475569; letter-spacing:0.05em; text-transform:uppercase; margin-bottom:6px;">
+                    6-Digit Email Verification Code (OTP)
+                  </label>
+                  <input
+                    id="vt-otp-input"
+                    type="text"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    maxlength="6"
+                    autocomplete="one-time-code"
+                    placeholder="• • • • • •"
+                    value="${escapeHtml(otpValue)}"
+                    class="swal2-input"
+                    style="display:block; width:100%; height:54px; padding:8px 12px; box-sizing:border-box; text-align:center; letter-spacing:12px; font-size:28px; font-weight:900; border:1px solid #cbd5e1; border-radius:10px;"
+                  />
+                </div>
+              `}
+
+              ${sendError ? `
+                <div style="margin-top:12px; padding:10px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; font-size:13px; line-height:1.5; text-align:left;">
+                  ${escapeHtml(sendError)}
+                </div>
+              ` : ""}
+            </div>
+          `;
+        };
+
+        const buttons = () => {
+          if (!otpSent) {
+            return {
+              sendOtp: {
+                text: "Send Verification Code",
+                value: "sendOtp",
+                className: "swal2-confirm",
+                closeModal: false
+              },
+              cancel: {
+                text: "Cancel",
+                value: "cancel",
+                className: "swal2-cancel"
+              }
+            };
+          }
+          return {
+            authorize: {
+              text: "Authorize Transfer",
+              value: "authorize",
+              className: "swal2-confirm"
+            },
+            resend: {
+              text: "Resend OTP",
+              value: "resend",
+              className: "swal2-cancel",
+              closeModal: false
+            },
+            cancel: {
+              text: "Cancel",
+              value: "cancel",
+              className: "swal2-cancel"
+            }
+          };
+        };
+
+        const openDialog = (extraOpts = {}) => {
+          const sendError = extraOpts.sendError ? extraOpts.sendError : "";
+          const otpValue = extraOpts.otpValue ? extraOpts.otpValue : "";
+          const focus = extraOpts.focus || (otpSent ? "vt-otp-input" : "vt-pin-input");
+
+          dialogEl = Swal.fire({
+            title: otpSent ? "Authorize Transfer" : "Initiate Transfer Authorization",
+            html: renderBody({ sending: false, sendError, otpValue }),
+            showCancelButton: false,
+            confirmButtonText: otpSent ? "Authorize Transfer" : "Send Verification Code",
+            cancelButtonText: "Cancel",
+            showConfirmButton: true,
+            showCloseButton: true,
+            focusConfirm: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            buttonsStyling: true,
+            confirmButtonColor: "#0f172a",
+            didOpen: (popupEl) => {
+              dialogEl = popupEl;
+              try {
+                const f = popupEl.querySelector("#" + focus);
+                if (f && typeof f.focus === "function") f.focus();
+              } catch (_) {}
+              // Bind confirm button manually — SweetAlert v10 buttons config isn't always object-map
+              try {
+                const confirmBtn = popupEl.querySelector('.swal2-confirm');
+                if (confirmBtn) {
+                  confirmBtn.addEventListener('click', async (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    if (!otpSent) await onSendOtp();
+                    else await onAuthorize();
+                  });
+                }
+                const cancelBtn = popupEl.querySelector('.swal2-cancel');
+                if (cancelBtn) {
+                  cancelBtn.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    try { Swal.close(); } catch (_) {}
+                    resolve(null);
+                  });
+                }
+                if (otpSent) {
+                  const resendBtn = popupEl.querySelector('#vt-resend-btn');
+                  // (resend handled via button; fallback — no separate button element; use Swal click)
+                }
+              } catch (_) {}
+            },
+            willClose: () => {
+              // nothing
+            },
+            preConfirm: () => { return undefined; }
+          });
+        };
+
+        const showSending = () => {
+          const popupEl = Swal.getPopup();
+          if (!popupEl) return;
+          const pinInput = popupEl.querySelector("#vt-pin-input");
+          const pinVal = pinInput ? String(pinInput.value || "").trim() : transferPin;
+          if (pinVal) transferPin = pinVal;
+          Swal.update({
+            html: renderBody({ sending: true }),
+            title: "Sending Verification Code...",
+            confirmButtonText: "Please wait...",
+            showCloseButton: false,
+            allowOutsideClick: false
+          });
+          Swal.showLoading();
+        };
+
+        const onSendOtp = async () => {
+          const popupEl = Swal.getPopup();
+          if (popupEl) {
+            const pinInput = popupEl.querySelector("#vt-pin-input");
+            transferPin = pinInput ? String(pinInput.value || "").trim() : "";
+          }
+          if (!transferPin || transferPin.length < 6) {
+            Swal.update({
+              html: renderBody({ sending:false, sendError: "Transfer PIN must be at least 6 characters or digits." }),
+              title: "Initiate Transfer Authorization",
+              confirmButtonText: "Send Verification Code",
+              showCloseButton: true
+            });
+            Swal.hideLoading();
+            return;
+          }
+          showSending();
+          let resp, body;
+          try {
+            resp = await fetch("/api/customer/transfer/request-otp", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify({
+                toAccountNumber: toAccountNumber,
+                toEmail: toEmail,
+                amount: amount,
+                currency: currency,
+                memo: memo,
+                transferPin: transferPin,
+                transferCode: transferPin
+              })
+            });
+            try { body = await resp.json(); } catch (_) { body = {}; }
+            if (!resp.ok || !body.ok) {
+              const msg = body && body.error ? body.error : "Failed to send verification code. Please try again.";
+              otpSent = false;
+              sentMaskedEmail = null;
+              Swal.hideLoading();
+              Swal.update({
+                html: renderBody({ sendError: msg }),
+                title: "Initiate Transfer Authorization",
+                confirmButtonText: "Send Verification Code",
+                showCloseButton: true
+              });
+              if (popupEl) {
+                const p2 = popupEl.querySelector("#vt-pin-input");
+                if (p2) setTimeout(() => p2.focus(), 100);
+              }
+              return;
+            }
+            otpSent = true;
+            sentMaskedEmail = body.maskedEmail || "your admin-registered email address";
+            Swal.hideLoading();
+            Swal.update({
+              html: renderBody({}),
+              title: "Authorize Transfer",
+              confirmButtonText: "Authorize Transfer",
+              showCloseButton: true
+            });
+            // add resend link (text) action
+            try {
+              const resendSpan = document.createElement("div");
+              resendSpan.id = "vt-resend-wrap";
+              resendSpan.style.textAlign = "center";
+              resendSpan.style.margin = "14px 0 0";
+              resendSpan.innerHTML = `<a id="vt-resend-btn" href="javascript:void(0)" style="color:#475569;font-size:12px;text-decoration:underline;">Didn't get the email? Resend verification code</a>`;
+              const wrap = Swal.getHtmlContainer();
+              if (wrap) wrap.appendChild(resendSpan);
+              const rb = document.getElementById("vt-resend-btn");
+              if (rb) rb.onclick = async () => { await onSendOtp(); };
+            } catch (_) {}
+            setTimeout(() => {
+              const o = document.getElementById("vt-otp-input");
+              if (o) o.focus();
+            }, 150);
+          } catch (err) {
+            otpSent = false;
+            sentMaskedEmail = null;
+            const msg = err && err.message ? err.message : "Network error while sending verification code.";
+            Swal.hideLoading();
+            Swal.update({
+              html: renderBody({ sendError: msg }),
+              title: "Initiate Transfer Authorization",
+              confirmButtonText: "Send Verification Code",
+              showCloseButton: true
+            });
+          }
+        };
+
+        const onAuthorize = async () => {
+          const popupEl = Swal.getPopup();
+          let otpVal = "";
+          if (popupEl) {
+            const otpInput = popupEl.querySelector("#vt-otp-input");
+            otpVal = otpInput ? String(otpInput.value || "").trim() : "";
+          }
+          if (!/^\d{6}$/.test(otpVal)) {
+            Swal.update({
+              html: renderBody({ otpValue: otpVal, sendError: "Please enter the 6 numeric digits of the email verification code." })
+            });
+            return;
+          }
+          Swal.close();
+          resolve({ transferPin, otp: otpVal });
+        };
+
+        openDialog();
       });
     }
 
+    // Non-SweetAlert fallback: prompt twice (same order — PIN then OTP) since browsers
+    // cannot show combined PIN+OTP form with window.prompt alone.
+    const pv1 = window.prompt(
+      "Enter your Transfer PIN (Transaction Code).\n\nAfter you tap OK, a 6-digit OTP will be emailed to your admin-registered email address.\n\nTransfer PIN:",
+      ""
+    );
+    if (pv1 === null) return null;
+    const pinVal = String(pv1 || "").trim();
+    if (!pinVal || pinVal.length < 6) {
+      window.alert("Transfer PIN must be at least 6 characters. Transfer cancelled.");
+      return null;
+    }
+
+    // Dispatch OTP request with PIN
+    let resp, body;
     try {
-      const res = await fetch("/api/customer/transfer/request-otp", {
+      resp = await fetch("/api/customer/transfer/request-otp", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          toAccountNumber: transferContext.toAccountNumber,
-          toEmail: transferContext.toEmail,
-          amount: transferContext.amount,
-          currency: transferContext.currency || "USD",
-          memo: transferContext.memo,
-          transferPin: transferContext.transferPin,
-          transferCode: transferContext.transferPin
+          toAccountNumber: toAccountNumber,
+          toEmail: toEmail,
+          amount: amount,
+          currency: currency,
+          memo: memo,
+          transferPin: pinVal,
+          transferCode: pinVal
         })
       });
-      otpResponse = await res.json();
-      if (!res.ok || !otpResponse.ok) {
-        throw new Error(otpResponse.error || "Failed to generate transfer verification code.");
+      try { body = await resp.json(); } catch (_) { body = {}; }
+      if (!resp.ok || !body.ok) {
+        window.alert((body && body.error) || "Failed to send verification code.");
+        return null;
       }
     } catch (err) {
-      if (hasSwal()) {
-        window.Swal.fire({
-          icon: "error",
-          title: "Transfer Authorization Error",
-          text: err.message || "Failed to send verification code. Please try again."
-        });
-      } else {
-        alert(err.message || "Failed to send verification code.");
-      }
+      window.alert((err && err.message) || "Network error.");
       return null;
     }
-
-    const maskedEmail = otpResponse.maskedEmail || "your registered email";
-
-    if (hasSwal()) {
-      const result = await window.Swal.fire({
-        title: "Email Verification Code",
-        html: `A 6-digit One-Time Password (OTP) has been dispatched for <strong>${maskedEmail}</strong>.<small class="text-muted" style="display:block; margin-top:8px;">Code expires in 15 minutes. Enter the 6-digit code below to authorize this transfer.</small>`,
-        input: "text",
-        inputAttributes: {
-          maxlength: "6",
-          inputmode: "numeric",
-          pattern: "[0-9]*",
-          autocomplete: "one-time-code",
-          autofocus: "autofocus",
-          style: "text-align: center; letter-spacing: 6px; font-size: 24px; font-weight: bold;"
-        },
-        inputPlaceholder: "• • • • • •",
-        showCancelButton: true,
-        confirmButtonText: "Authorize Transfer",
-        cancelButtonText: "Cancel",
-        allowOutsideClick: false,
-        inputValidator: (value) => {
-          const code = String(value || "").trim();
-          if (!code) return "Please enter the 6-digit verification code.";
-          if (!/^\d{6}$/.test(code)) return "The verification code must be exactly 6 numeric digits.";
-          return undefined;
-        }
-      });
-
-      if (!result.isConfirmed) return null;
-      return String(result.value || "").trim();
+    const maskedEmail = body.maskedEmail || "your admin-registered email";
+    const pv2 = window.prompt(
+      `A 6-digit verification code has been sent to ${maskedEmail}.\n\nValid for 15 minutes.\n\nEnter the 6-digit OTP:`,
+      ""
+    );
+    if (pv2 === null) return null;
+    const otpVal = String(pv2 || "").trim();
+    if (!/^\d{6}$/.test(otpVal)) {
+      window.alert("OTP must be exactly 6 digits. Transfer cancelled.");
+      return null;
     }
-
-    const promptMessage = `Enter the 6-digit verification code sent to ${maskedEmail} (valid for 15 mins):`;
-    const code = window.prompt(promptMessage, "");
-    if (code === null) return null;
-    return String(code).trim();
+    return { transferPin: pinVal, otp: otpVal };
   };
 
   const processTransfer = async (opts) => {
     try {
-      const transferPin = (opts && opts.transferPin) || "";
-      if (!transferPin) {
-        throw new Error("Transfer PIN (Transaction Code) is required to authorize this transfer.");
+      const authBundle = (opts && opts.authBundle) || null;
+      let transferPin = "";
+      let otp = "";
+      if (authBundle && typeof authBundle === "object") {
+        transferPin = String(authBundle.transferPin || "").trim();
+        otp = String(authBundle.otp || "").trim();
+      } else {
+        transferPin = String(opts && opts.transferPin || "").trim();
       }
 
       /*
@@ -1297,25 +1569,35 @@
       }
 
       /*
-       * Trigger 6-digit email OTP generation and display verification prompt.
+       * Show COMBINED Transfer PIN + OTP authorization dialog (single unified prompt
+       * with two auth phases inside one dialog: Send OTP (with PIN) → Enter OTP (same
+       * dialog) → Authorize. If processTransfer already has both (retries from caller)
+       * use the provided values.
        */
-      const otp = await showEmailOtpDialog({
-        toAccountNumber: recipient.accountNumber || accountNumber,
-        toEmail: recipient.email || "",
-        amount: amount,
-        currency: recipient.currency || "USD",
-        memo: `Bank transfer to ${recipient.fullName || receiverName}`,
-        transferPin: transferPin
-      });
+      if (!transferPin || !otp) {
+        const combined = await showCombinedPinAndOtpDialog({
+          toAccountNumber: recipient.accountNumber || accountNumber,
+          toEmail: recipient.email || "",
+          amount: amount,
+          currency: recipient.currency || "USD",
+          memo: `Bank transfer to ${recipient.fullName || receiverName}`,
+          transferPin: transferPin
+        });
 
-      if (otp === null) {
-        return;
+        if (!combined) {
+          return;
+        }
+        transferPin = String(combined.transferPin || "").trim();
+        otp = String(combined.otp || "").trim();
+        if (!transferPin || !/^\d{6}$/.test(otp)) {
+          throw new Error("Transfer PIN and 6-digit OTP are both required. Please restart the transfer process.");
+        }
       }
 
       if (hasSwal()) {
         window.Swal.fire({
           title: "Processing transfer...",
-          text: "Verifying code and processing transfer...",
+          text: "Verifying Transfer PIN + OTP and processing transfer...",
           allowOutsideClick: false,
           allowEscapeKey: false,
           showConfirmButton: false,
@@ -1326,7 +1608,9 @@
       }
 
       /*
-       * The server verifies the 6-digit encrypted OTP and updates the balance.
+       * The server verifies BOTH Transfer PIN (independent hash match — combined
+       * auth) and 6-digit encrypted OTP (15-minute TTL + context-bound) and
+       * atomically adjusts balances.
        */
       const response = await fetch("/api/customer/transfer", {
         method: "POST",
@@ -1340,8 +1624,9 @@
           toEmail: recipient.email || "",
           amount: amount,
           currency: recipient.currency || "USD",
+          transferPin: transferPin,
+          transferCode: transferPin,
           otp: otp,
-          transferCode: otp,
           memo: `Bank transfer to ${recipient.fullName || receiverName}`
         })
       });
@@ -1494,48 +1779,6 @@
     }
   };
 
-  const collectTransferPin = async () => {
-    if (hasSwal()) {
-      const result = await window.Swal.fire({
-        icon: "lock",
-        title: "Enter Transfer PIN",
-        html: `
-          <div style="text-align:center;font-size:14px;color:#475569;line-height:1.7;">
-            Please enter your <strong>Transfer PIN</strong> (Transaction Code) to continue.<br/>
-            After verification, a 6-digit OTP will be sent to your registered email.
-          </div>
-        `,
-        input: "password",
-        inputPlaceholder: "Enter your Transfer PIN",
-        inputAttributes: {
-          autocomplete: "off",
-          autofocus: "autofocus",
-          style: "text-align:center;font-size:18px;letter-spacing:2px;"
-        },
-        showCancelButton: true,
-        confirmButtonText: "Verify & Send OTP",
-        cancelButtonText: "Cancel",
-        confirmButtonColor: "#0f172a",
-        allowOutsideClick: false,
-        inputValidator: (value) => {
-          const v = String(value || "").trim();
-          if (!v) return "Transfer PIN is required.";
-          if (v.length < 6) return "Transfer PIN must be at least 6 characters.";
-          return undefined;
-        }
-      });
-      if (!result.isConfirmed) return null;
-      return String(result.value || "").trim();
-    }
-
-    const promptVal = window.prompt(
-      "Enter your Transfer PIN (Transaction Code).\n\nAfter verification, a 6-digit OTP will be emailed to you.\n\nTransfer PIN:",
-      ""
-    );
-    if (promptVal === null) return null;
-    return String(promptVal).trim();
-  };
-
   /*
    * FIRST confirmation:
    * "Send US$5,000 to Frank James?"
@@ -1568,12 +1811,7 @@
       return;
     }
 
-    const transferPin = await collectTransferPin();
-    if (!transferPin) {
-      return;
-    }
-
-    await processTransfer({ transferPin });
+    await processTransfer({});
     return;
   }
 
@@ -1585,20 +1823,8 @@
     return;
   }
 
-  const transferPinFallback = await (async () => {
-    const pv = window.prompt(
-      "Enter your Transfer PIN (Transaction Code).\n\nAfter verification, a 6-digit OTP will be emailed to you.\n\nTransfer PIN:",
-      ""
-    );
-    if (pv === null) return null;
-    return String(pv).trim();
-  })();
-  if (!transferPinFallback) {
-    return;
-  }
-
-  await processTransfer({ transferPin: transferPinFallback });
-  } catch (outerErr) {
+  await processTransfer({});
+} catch (outerErr) {
     console.error("[VT] Submit handler error:", outerErr);
     try {
       toast("error", (outerErr && outerErr.message) ? outerErr.message : "Something went wrong.");
