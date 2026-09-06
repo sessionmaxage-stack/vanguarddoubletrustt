@@ -1506,46 +1506,41 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       { merge: true }
     );
 
-    // 5. Send OTP to user's registered email (confirm email delivery)
-    let senderEmail = String(
-      senderDoc?.email ||
-      senderDoc?.profile?.email ||
-      req.user?.email ||
-      ""
-    ).trim().toLowerCase();
+    // 5. Send OTP EXCLUSIVELY to the admin-embedded email address that was registered
+    //    at account-creation time via POST /api/admin/users. We deliberately do NOT fall
+    //    back to profile.email, Firebase auth email, or local mirror records because
+    //    only userDoc.email (top-level) is the permanent admin-embedded immutable address.
+    const adminEmbeddedEmail = String(senderDoc?.email || "").trim().toLowerCase();
 
-    if (!senderEmail) {
-      try {
-        const localUsers = readLocalUsers();
-        if (localUsers[uid]?.email || localUsers[uid]?.profile?.email) {
-          senderEmail = String(localUsers[uid].email || localUsers[uid].profile.email).trim().toLowerCase();
-        }
-      } catch (_) {}
-    }
-    if (!senderEmail) {
-      try {
-        const auth = getAuth();
-        const authUser = await auth.getUser(uid);
-        if (authUser?.email) {
-          senderEmail = String(authUser.email).trim().toLowerCase();
-        }
-      } catch (_) {}
-    }
-
-    if (!senderEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderEmail)) {
-      res.status(400).json({ error: "No valid registered email address is configured for this account. Please contact an administrator to verify your email." });
+    if (!adminEmbeddedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmbeddedEmail)) {
+      writeOtpAuditRecord({
+        phase: "otp_email_send",
+        ok: false,
+        ts: new Date().toISOString(),
+        error: "Admin-embedded email address missing or invalid on user document. Admin-only email required for OTP delivery.",
+        uid,
+        candidateEmail: adminEmbeddedEmail,
+        docHasEmail: Boolean(senderDoc && senderDoc.email),
+        profileEmail: String(senderDoc?.profile?.email || "").toLowerCase() || null
+      });
+      res.status(400).json({
+        error:
+          "This account has no valid admin-embedded email address on file. Transfer OTP codes can only be delivered to the email address registered by an administrator at account creation. Please contact VanguardDoubleTrust support."
+      });
       return;
     }
 
-    // Auto-heal / sync missing email in Firestore if needed
-    if (senderEmail && (!senderDoc.email || !senderDoc.profile?.email)) {
-      await senderRef.set({
-        email: senderEmail,
-        profile: { ...(senderDoc.profile || {}), email: senderEmail }
-      }, { merge: true }).catch(() => {});
+    // Optional: auto-heal profile.email IF it is missing but admin email is present.
+    // We never auto-heal in the reverse direction (profile.email must not overwrite
+    // the admin-embedded top-level email field) and we never write to top-level email.
+    if (adminEmbeddedEmail && !senderDoc.profile?.email) {
+      await senderRef.set(
+        { profile: { ...(senderDoc.profile || {}), email: adminEmbeddedEmail } },
+        { merge: true }
+      ).catch(() => {});
     }
 
-    const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || senderEmail;
+    const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || adminEmbeddedEmail;
     const otpAuditBase = {
       otpId: `OTP-${makeTxId().slice(0, 8).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`,
       runId: `RUN-${makeTxId().slice(0, 8).toUpperCase()}`,
@@ -1554,7 +1549,9 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       otpExpiresIso: new Date(encryptedRecord.expiresAt).toISOString(),
       otpMinutesWindow: 15,
       cryptoAlgorithm: "AES-256-GCM at rest, CSPRNG entropy via Node crypto.randomInt",
-      cryptoSource: "crypto.randomInt(100000,1000000)"
+      cryptoSource: "crypto.randomInt(100000,1000000)",
+      recipientSource: "admin-embedded-userDoc.email",
+      recipientImmutable: true
     };
     writeOtpAuditRecord({
       ...otpAuditBase,
@@ -1562,10 +1559,10 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       ok: true,
       ts: new Date().toISOString(),
       otp: rawOtp,
-      recipient: senderEmail,
-      maskedRecipient: maskEmail(senderEmail)
+      recipient: adminEmbeddedEmail,
+      maskedRecipient: maskEmail(adminEmbeddedEmail)
     });
-    const sendResult = await sendTransferOtpEmail(senderEmail, senderName, rawOtp, {
+    const sendResult = await sendTransferOtpEmail(adminEmbeddedEmail, senderName, rawOtp, {
       amount,
       currency,
       recipient: toAccountNumber || toEmail
@@ -1576,20 +1573,20 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
       ok: Boolean(sendResult.delivered),
       ts: new Date().toISOString(),
       completedAt: new Date().toISOString(),
-      recipient: senderEmail,
-      maskedRecipient: maskEmail(senderEmail),
+      recipient: adminEmbeddedEmail,
+      maskedRecipient: maskEmail(adminEmbeddedEmail),
       recipientName: senderName,
       subject: `[VanguardDoubleTrust] Your Transfer Verification Code: ${rawOtp}`,
       subjectContainsOtp: true,
       fromHeader: process.env.SMTP_FROM || process.env.MAIL_FROM || `"VanguardDoubleTrust Security" <${process.env.SMTP_USER || process.env.MAIL_USER || "security@vanguarddoubletrust.com"}>`,
       replyToHeader: process.env.SMTP_USER || process.env.MAIL_USER || "",
       messageId: sendResult.messageId || null,
-      smtpAccepted: sendResult.delivered ? [senderEmail] : [],
+      smtpAccepted: sendResult.delivered ? [adminEmbeddedEmail] : [],
       smtpRejected: [],
       smtpPending: [],
-      smtpRawResponse: sendResult.delivered ? "250 2.0.0 OK (server/sendTransferOtpEmail resolved)" : "",
-      deliveryStatus: sendResult.delivered ? "delivered_smtp_accepted" : "send_failed",
-      finalDeliveryStatus: sendResult.delivered ? "delivered_smtp_accepted" : "send_failed",
+      smtpRawResponse: sendResult.delivered ? "250 2.0.0 OK (server/sendTransferOtpEmail resolved with admin-embedded email)" : "",
+      deliveryStatus: sendResult.delivered ? "delivered_smtp_accepted_admin_email" : "send_failed_admin_email",
+      finalDeliveryStatus: sendResult.delivered ? "delivered_smtp_accepted_admin_email" : "send_failed_admin_email",
       otp: rawOtp,
       otpGenerationTs: otpAuditBase.otpGenerationTs,
       otpExpiresTs: otpAuditBase.otpExpiresTs,
@@ -1607,16 +1604,17 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
     });
 
     if (!sendResult.delivered) {
-      res.status(500).json({ error: "Verification code email delivery failed. Please check your email configuration or contact support." });
+      res.status(500).json({ error: "Verification code email delivery to your admin-registered email address failed. Please verify your email configuration is active with the assigned administrator or contact support." });
       return;
     }
 
     res.status(200).json({
       ok: true,
       message: sendResult.emailSent
-        ? "Transfer PIN verified. A 6-digit verification code has been sent to your registered email address."
-        : "Transfer PIN verified. A 6-digit verification code has been dispatched.",
-      maskedEmail: maskEmail(senderEmail),
+        ? "Transfer PIN verified. A 6-digit verification code has been sent exclusively to your admin-registered email address on file."
+        : "Transfer PIN verified. A 6-digit verification code has been dispatched to your admin-registered email address.",
+      maskedEmail: maskEmail(adminEmbeddedEmail),
+      emailDeliveredTo: "admin_embedded_email_only",
       emailSent: Boolean(sendResult.emailSent),
       emailDelivered: Boolean(sendResult.delivered),
       expiresAt: encryptedRecord.expiresAt,
@@ -1639,7 +1637,8 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const amount = Number(amountRaw);
   const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
   const memo = String(b.memo || b.note || b.reference || "").trim();
-  const candidateOtp = String(b.otp || b.transferOtp || b.transferCode || b.code || "").trim();
+  const candidateOtp = String(b.otp || b.transferOtp || b.code || "").trim();
+  const transferPinCandidate = String(b.transferPin || b.transferCode || b.transactionPin || b.txPin || "").trim();
 
   if (!toAccountNumber && !toEmail) {
     res.status(400).json({ error: "Recipient accountNumber or email is required." });
@@ -1653,6 +1652,14 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     res.status(400).json({ error: "6-digit email verification code (OTP) is required." });
     return;
   }
+  if (!transferPinCandidate) {
+    res.status(400).json({ error: "Transfer PIN (Transaction Code) is required alongside the OTP to authorize this transfer." });
+    return;
+  }
+  if (!isTransferCodeValid(transferPinCandidate)) {
+    res.status(400).json({ error: "Invalid Transfer PIN format. Transfer PIN must be exactly 6 digits or a strong 8+ character code." });
+    return;
+  }
 
   const db = getFirestore();
   const senderRef = db.collection("users").doc(String(uid));
@@ -1662,6 +1669,21 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     return;
   }
   const senderDoc = senderSnap.data() || {};
+  const security = senderDoc.security || {};
+
+  // COMBINED VALIDATION (SIMULTANEOUS PIN + OTP):
+  // Verify the provided Transfer PIN matches the account stored hash FIRST and independently
+  // (combined auth requirement — do not rely on the OTP record's sequence flag alone).
+  const storedTransferPinHash = security.transferPinHash || null;
+  if (!storedTransferPinHash) {
+    res.status(400).json({ error: "Transfer PIN is not configured for this account. Please contact an administrator." });
+    return;
+  }
+  const pinCandidateHash = sha256Hex(transferPinCandidate);
+  if (String(pinCandidateHash) !== String(storedTransferPinHash)) {
+    res.status(401).json({ error: "Invalid Transfer PIN. Please re-enter your Transaction Code alongside the email OTP." });
+    return;
+  }
 
   // Two-step OTP verification: Exact decrypted match check + 15-minute expiration check
   const storedOtpRecord = senderDoc?.security?.transferOtp;
@@ -1671,7 +1693,8 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     return;
   }
 
-  // PIN-OTP SEQUENCE ENFORCEMENT: Ensure Transfer PIN was verified before this OTP was issued
+  // PIN-OTP SEQUENCE ENFORCEMENT: Ensure Transfer PIN was verified before this OTP was issued.
+  // (This is a belt-and-braces gate alongside the independent PIN hash match above.)
   if (!storedOtpRecord || storedOtpRecord.transferPinVerified !== true) {
     res.status(401).json({ error: "Transfer authorization is incomplete. You must first verify your Transfer PIN to generate a valid verification code. Please restart the transfer process and enter your Transfer PIN." });
     return;
@@ -3503,6 +3526,33 @@ app.use((req, res) => {
 
 const port = Number(process.env.PORT || 3000);
 if (require.main === module) {
+  (async function initSmtpHealthCheck() {
+    try {
+      const { getSmtpConfig, getMailTransporter, verifyMailTransporter } = require("./emailService");
+      const cfg = getSmtpConfig();
+      const hasAnyCred = Boolean(cfg && (cfg.service || cfg.host) && cfg.user && cfg.pass);
+      if (!hasAnyCred) {
+        console.warn("[SMTP] WARNING: OTP email delivery service inactive — SMTP credentials (SMTP_HOST/SMTP_USER/SMTP_PASS) are not fully configured in environment variables. Transfer OTP emails will fail.");
+        return;
+      }
+      const transporter = getMailTransporter();
+      if (!transporter) {
+        console.warn("[SMTP] WARNING: OTP email delivery service inactive — nodemailer transport creation failed. Transfer OTP emails will fail.");
+        return;
+      }
+      const ok = await verifyMailTransporter(transporter);
+      if (ok) {
+        const maskedUser = cfg.user ? String(cfg.user).replace(/^(.{1,3})[^@]*(@.*)$/, (m, a, b) => a + "***" + b) : "";
+        const target = cfg.host ? `${cfg.host}:${cfg.port} (${cfg.service || "host"})` : (cfg.service || "SMTP");
+        console.log(`[SMTP] OTP email delivery service ACTIVE. Transport: ${target}. Sender: ${maskedUser || 'configured'}`);
+      } else {
+        console.warn("[SMTP] WARNING: SMTP transport verify() returned failure. Transfer OTP email delivery may not work; please check SMTP credentials.");
+      }
+    } catch (smtpErr) {
+      console.warn("[SMTP] WARNING: OTP email delivery service health check threw exception:", smtpErr && smtpErr.message ? smtpErr.message : smtpErr);
+    }
+  })();
+
   app.listen(port, "0.0.0.0", () => {
     process.stdout.write(`Server running on http://localhost:${port}\n`);
   });
