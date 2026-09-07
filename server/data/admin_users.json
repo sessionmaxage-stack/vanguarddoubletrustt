@@ -163,5 +163,88 @@
     "photoURL": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
     "photo": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
     "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"
+  },
+  "A1sWbYVB2hQCi5W87W4gvnAhVdh1": {
+    "email": "johndoe48110@example.com",
+    "createdAt": "2026-09-07T09:27:10.670Z",
+    "updatedAt": "2026-09-07T09:27:10.670Z",
+    "profile": {
+      "email": "johndoe48110@example.com",
+      "firstname": "John",
+      "lastname": "Doe48110",
+      "phone": "+1 555 123 4567",
+      "country": "US",
+      "preferredLanguage": "en",
+      "dateOfBirth": "1990-05-15",
+      "gender": "male",
+      "nationality": "American",
+      "occupation": "Financial Analyst",
+      "address": "742 Evergreen Terrace",
+      "city": "Springfield",
+      "state": "IL",
+      "zipCode": "62704",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-09-07T09:27:10.670Z",
+      "kycDoneAt": "2026-09-07T09:27:10.670Z",
+      "KYCDoneAt": "2026-09-07T09:27:10.670Z",
+      "profilePic": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+      "photoURL": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+      "photo": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"
+    },
+    "security": {
+      "accountPinHash": "481f6cc0511143ccdd7e2d1b1b94faf0a700a8b49cd13922a70b5ae28acaa8c5",
+      "transferPinHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-09-07T09:27:10.670Z",
+      "kycDoneAt": "2026-09-07T09:27:10.670Z",
+      "KYCDoneAt": "2026-09-07T09:27:10.670Z",
+      "profilePic": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+      "photoURL": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+      "photo": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+      "accountCreatedOtp": {
+        "encryptedData": "733f944287e2",
+        "iv": "b4746539a5ca608a50dbf860",
+        "authTag": "b97c828ab6177db9ec6d75af8d70264d",
+        "createdAt": 1788773231560,
+        "expiresAt": 1788774131560,
+        "verified": false,
+        "transferContext": {
+          "amount": null,
+          "currency": "USD",
+          "toAccountNumber": null,
+          "toEmail": null,
+          "memo": null
+        }
+      },
+      "accountCreatedOtpSentAt": "2026-09-07T09:27:12.032Z"
+    },
+    "account": {
+      "accountNumber": "8285775467",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-09-07T09:27:10.670Z",
+      "lastLogin": "2026-09-07T09:27:10.670Z",
+      "currency": "USD",
+      "balance": 1500
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "en",
+    "kycCompleted": true,
+    "country": "US",
+    "firstname": "John",
+    "lastname": "Doe48110",
+    "profilePic": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+    "photoURL": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+    "photo": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+    "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"
   }
 }
