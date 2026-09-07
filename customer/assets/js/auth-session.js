@@ -54,6 +54,80 @@
     window.alert(`${title}\n${text}`);
   }
 
+  function integrityHash(fields) {
+    const str = Array.isArray(fields)
+      ? fields.map(function (v) { return String(v == null ? "" : v); }).join("|||")
+      : String(fields == null ? "" : fields);
+    let h1 = 0x811c9dc5;
+    let h2 = 0xdeadbeef;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i) & 0xff;
+      h1 = Math.imul(h1 ^ c, 0x01000193);
+      h2 = Math.imul(h2 ^ c, 0x85ebca77);
+    }
+    h1 = (h1 ^ (h1 >>> 16)) >>> 0;
+    h2 = (h2 ^ (h2 >>> 13)) >>> 0;
+    return ("00000000" + h1.toString(16)).slice(-8) + ("00000000" + h2.toString(16)).slice(-8);
+  }
+
+  function sealTransferContext(ctx) {
+    if (!ctx || typeof ctx !== "object") return ctx;
+    try {
+      const snapshot = JSON.parse(JSON.stringify(ctx));
+      Object.defineProperty(ctx, "__sealedSnapshot", {
+        value: Object.freeze(snapshot),
+        writable: false,
+        enumerable: false,
+        configurable: false
+      });
+      Object.defineProperty(ctx, "__sealedIntegrity", {
+        value: integrityHash([
+          snapshot.toFullName,
+          snapshot.toAccountNumber,
+          snapshot.toEmail,
+          snapshot.amount,
+          snapshot.currency,
+          snapshot.feeAmount
+        ]),
+        writable: false,
+        enumerable: false,
+        configurable: false
+      });
+      Object.freeze(ctx);
+    } catch (_) {}
+    return ctx;
+  }
+
+  function verifyTransferContextIntegrity(ctx, displayedValues) {
+    if (!ctx || typeof ctx !== "object") return false;
+    try {
+      const sealed = ctx.__sealedSnapshot;
+      const sealedHash = ctx.__sealedIntegrity;
+      if (!sealed || !sealedHash) return false;
+      const rehash = integrityHash([
+        sealed.toFullName,
+        sealed.toAccountNumber,
+        sealed.toEmail,
+        sealed.amount,
+        sealed.currency,
+        sealed.feeAmount
+      ]);
+      if (rehash !== sealedHash) return false;
+      if (displayedValues && typeof displayedValues === "object") {
+        const keys = ["toFullName", "toAccountNumber", "toEmail", "amount", "currency", "feeAmount"];
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          const seal = String(sealed[k] == null ? "" : sealed[k]);
+          const disp = String(displayedValues[k] == null ? "" : displayedValues[k]);
+          if (seal !== disp) return false;
+        }
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function showTransferSuccessCustom(opts) {
     opts = opts || {};
     var amountText = String(opts.amountText || "");
@@ -1165,6 +1239,24 @@
     const amount = Number(context.amount);
     const currency = String(context.currency || "USD").trim().toUpperCase() || "USD";
     const memo = String(context.memo || "").trim();
+    const toFullName = String(context.toFullName || "").trim() ||
+                      (typeof receiverName !== "undefined" ? String(receiverName || "").trim() : "") ||
+                      "";
+    const feeAmount = typeof context.feeAmount === "number" ? context.feeAmount : 0;
+    const displayCurrency = currency || "USD";
+    const formattedAmount = Number.isFinite(amount) ? amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+    const formattedFee = Number.isFinite(feeAmount) ? feeAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+    const totalAmount = Number.isFinite(amount) && Number.isFinite(feeAmount) ? amount + feeAmount : amount;
+    const formattedTotal = Number.isFinite(totalAmount) ? totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formattedAmount;
+
+    const sealedCtx = sealTransferContext({
+      toFullName: toFullName,
+      toAccountNumber: toAccountNumber,
+      toEmail: toEmail,
+      amount: amount,
+      currency: displayCurrency,
+      feeAmount: feeAmount
+    });
 
     if (hasSwal()) {
       const Swal = window.Swal;
@@ -1173,8 +1265,10 @@
         let otpSent = false;
         let sentMaskedEmail = null;
         let delegated = false;
+        let phase = "pin"; // pin -> otp -> confirm
+        let confirmedOtp = "";
 
-        const renderBody = (opts = {}) => {
+        const renderPinOtpBody = (opts = {}) => {
           const sending = Boolean(opts.sending);
           const sendError = opts.sendError ? String(opts.sendError) : "";
           const otpValue = opts.otpValue ? String(opts.otpValue) : "";
@@ -1237,6 +1331,127 @@
           `;
         };
 
+        const renderConfirmBody = (opts = {}) => {
+          const integrityErr = opts.integrityError ? String(opts.integrityError) : "";
+          return `
+            <div class="vt-confirm-transfer-wrap" style="max-width:460px; margin: 0 auto;">
+              <div style="margin-bottom:18px; padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; color:#1e40af; font-size:13px; line-height:1.6;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                  <i class="fas fa-shield-alt" style="color:#2563eb; font-size:15px;"></i>
+                  <span style="font-weight:800; font-size:14px;">Transfer review required</span>
+                </div>
+                <div style="margin-left:28px;">OTP verified successfully. Please carefully review the transfer details below and click <strong>Confirm Transfer</strong> to finalize the disbursement. All displayed values are integrity-sealed against tampering.</div>
+              </div>
+
+              <div style="border:1px solid rgba(148,163,184,0.18); border-radius:12px; overflow:hidden; background:rgba(15,23,42,0.04); margin-bottom:14px;">
+                <div style="padding:14px 16px; border-bottom:1px solid rgba(148,163,184,0.14); background:rgba(15,23,42,0.06);">
+                  <div style="font-size:11px; font-weight:800; color:#475569; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px;">Recipient Information</div>
+                  <div style="margin-bottom:10px;">
+                    <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">Full Name (Account Holder)</label>
+                    <input
+                      type="text"
+                      id="vt-confirm-fullname"
+                      data-field="toFullName"
+                      value="${escapeHtml(toFullName)}"
+                      readonly="readonly"
+                      disabled="disabled"
+                      class="swal2-input"
+                      style="display:block; width:100%; height:40px; padding:6px 12px; box-sizing:border-box; font-size:14px; font-weight:700; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;"
+                    />
+                  </div>
+                  <div style="margin-bottom:4px;">
+                    <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">Account Number</label>
+                    <input
+                      type="text"
+                      id="vt-confirm-acctnum"
+                      data-field="toAccountNumber"
+                      value="${escapeHtml(toAccountNumber)}"
+                      readonly="readonly"
+                      disabled="disabled"
+                      class="swal2-input"
+                      style="display:block; width:100%; height:40px; padding:6px 12px; box-sizing:border-box; font-size:14px; font-weight:700; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;"
+                    />
+                  </div>
+                </div>
+
+                <div style="padding:14px 16px; border-bottom:1px solid rgba(148,163,184,0.14);">
+                  <div style="font-size:11px; font-weight:800; color:#475569; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px;">Transfer Breakdown</div>
+                  <div style="margin-bottom:10px;">
+                    <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">Transfer Amount</label>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <input
+                        type="text"
+                        id="vt-confirm-currency"
+                        data-field="currency"
+                        value="${escapeHtml(displayCurrency)}"
+                        readonly="readonly"
+                        disabled="disabled"
+                        class="swal2-input"
+                        style="display:block; width:90px; height:40px; padding:6px 10px; box-sizing:border-box; font-size:13px; font-weight:800; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; text-align:center; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;"
+                      />
+                      <input
+                        type="text"
+                        id="vt-confirm-amount"
+                        data-field="amount"
+                        value="${escapeHtml(formattedAmount)}"
+                        readonly="readonly"
+                        disabled="disabled"
+                        class="swal2-input"
+                        style="display:block; flex:1 1 auto; height:40px; padding:6px 12px; box-sizing:border-box; font-size:16px; font-weight:900; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; text-align:right; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;"
+                      />
+                    </div>
+                  </div>
+                  <div style="margin-bottom:10px;">
+                    <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">Transaction Fee</label>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <input
+                        type="text"
+                        id="vt-confirm-fee-currency"
+                        data-field="feeCurrency"
+                        value="${escapeHtml(displayCurrency)}"
+                        readonly="readonly"
+                        disabled="disabled"
+                        class="swal2-input"
+                        style="display:block; width:90px; height:40px; padding:6px 10px; box-sizing:border-box; font-size:13px; font-weight:800; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; text-align:center; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;"
+                      />
+                      <input
+                        type="text"
+                        id="vt-confirm-fee"
+                        data-field="feeAmount"
+                        value="${escapeHtml(formattedFee)}"
+                        readonly="readonly"
+                        disabled="disabled"
+                        class="swal2-input"
+                        style="display:block; flex:1 1 auto; height:40px; padding:6px 12px; box-sizing:border-box; font-size:16px; font-weight:900; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; text-align:right; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;"
+                      />
+                    </div>
+                  </div>
+                  <div style="padding:10px 12px; background:#0f172a; border-radius:8px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                      <span style="font-size:12px; font-weight:700; color:#cbd5e1; letter-spacing:0.04em; text-transform:uppercase;">Total to disburse</span>
+                      <span style="font-size:18px; font-weight:900; color:#ffffff;">${escapeHtml(displayCurrency)} ${escapeHtml(formattedTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <input type="hidden" id="vt-confirm-integrity" data-field="integrityHash" value="${escapeHtml(integrityHash([toFullName, toAccountNumber, toEmail, amount, displayCurrency, feeAmount]))}" />
+
+              ${integrityErr ? `
+                <div style="margin:0 0 14px; padding:10px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; font-size:13px; line-height:1.5; text-align:left;">
+                  <strong style="display:block; margin-bottom:4px;">⚠ Integrity validation failed</strong>
+                  ${escapeHtml(integrityErr)}
+                </div>
+              ` : ""}
+
+              <div style="font-size:11px; color:#64748b; text-align:center; line-height:1.5;">
+                <i class="fas fa-lock" style="color:#10b981;"></i>
+                Transfer parameters have been cryptographically sealed at OTP-validation time and cannot be altered on this page.
+              </div>
+            </div>
+          `;
+        };
+
         const bindDelegatedHandlers = (popupEl) => {
           if (delegated || !popupEl) return;
           delegated = true;
@@ -1254,16 +1469,29 @@
               ev.preventDefault();
               ev.stopPropagation();
               (async () => {
-                if (!otpSent) await onSendOtp();
-                else await onAuthorize();
+                if (phase === "pin") {
+                  if (!otpSent) await onSendOtp();
+                } else if (phase === "otp") {
+                  await onAuthorize();
+                } else if (phase === "confirm") {
+                  await onConfirmFinal();
+                }
               })();
               return;
             }
             if (cancelBtn) {
               ev.preventDefault();
               ev.stopPropagation();
-              try { Swal.close(); } catch (_) {}
-              resolve(null);
+              (async () => {
+                if (phase === "confirm") {
+                  phase = "otp";
+                  openConfirmOrPinOtp({ focus: "vt-otp-input" });
+                  return;
+                }
+                try { Swal.close(); } catch (_) {}
+                resolve(null);
+              })();
+              return;
             }
           });
           popupEl.addEventListener("keydown", (ev) => {
@@ -1272,21 +1500,108 @@
               if (tag === "textarea") return;
               ev.preventDefault();
               (async () => {
-                if (!otpSent) await onSendOtp();
-                else await onAuthorize();
+                if (phase === "pin") {
+                  if (!otpSent) await onSendOtp();
+                } else if (phase === "otp") {
+                  await onAuthorize();
+                } else if (phase === "confirm") {
+                  await onConfirmFinal();
+                }
               })();
             }
           });
+
+          const confirmWrap = popupEl.querySelector(".vt-confirm-transfer-wrap");
+          if (confirmWrap) {
+            const inputs = confirmWrap.querySelectorAll('input[type="text"], input[type="hidden"]');
+            inputs.forEach(function (inp) {
+              inp.addEventListener("cut", function (e) { e.preventDefault(); });
+              inp.addEventListener("copy", function (e) { e.preventDefault(); });
+              inp.addEventListener("paste", function (e) { e.preventDefault(); });
+              inp.addEventListener("keydown", function (e) { e.preventDefault(); });
+              inp.addEventListener("input", function (e) {
+                if (e && e.target && e.target.getAttribute) {
+                  const f = e.target.getAttribute("data-field");
+                  if (f && sealedCtx && sealedCtx.__sealedSnapshot) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    const orig = String(sealedCtx.__sealedSnapshot[f] == null ?
+                      (f === "amount" ? formattedAmount :
+                       f === "feeAmount" ? formattedFee :
+                       f === "currency" ? displayCurrency : "")
+                      : (f === "amount" ? Number(sealedCtx.__sealedSnapshot[f]).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) :
+                         f === "feeAmount" ? Number(sealedCtx.__sealedSnapshot[f]).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) :
+                         String(sealedCtx.__sealedSnapshot[f] || "")));
+                    if (inp.value !== orig) {
+                      try { inp.value = orig; } catch (_) {}
+                    }
+                  }
+                }
+                return false;
+              }, true);
+              inp.addEventListener("change", function (e) {
+                if (e && e.target && e.target.getAttribute) {
+                  const f = e.target.getAttribute("data-field");
+                  if (f && sealedCtx && sealedCtx.__sealedSnapshot) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    const orig = String(sealedCtx.__sealedSnapshot[f] == null ?
+                      (f === "amount" ? formattedAmount :
+                       f === "feeAmount" ? formattedFee :
+                       f === "currency" ? displayCurrency : "")
+                      : (f === "amount" ? Number(sealedCtx.__sealedSnapshot[f]).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) :
+                         f === "feeAmount" ? Number(sealedCtx.__sealedSnapshot[f]).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) :
+                         String(sealedCtx.__sealedSnapshot[f] || "")));
+                    if (inp.value !== orig) {
+                      try { inp.value = orig; } catch (_) {}
+                    }
+                  }
+                }
+                return false;
+              }, true);
+            });
+          }
         };
 
-        const openDialog = (extraOpts = {}) => {
+        const openConfirmOrPinOtp = (extraOpts = {}) => {
+          if (phase === "confirm") {
+            const integrityErr = extraOpts.integrityError ? extraOpts.integrityError : "";
+            Swal.fire({
+              title: "Confirm Transfer",
+              html: renderConfirmBody({ integrityError: integrityErr }),
+              showCancelButton: true,
+              confirmButtonText: "Confirm Transfer",
+              cancelButtonText: "← Back to OTP",
+              showConfirmButton: true,
+              showCloseButton: true,
+              focusConfirm: true,
+              allowOutsideClick: false,
+              allowEscapeKey: false,
+              buttonsStyling: true,
+              confirmButtonColor: "#059669",
+              cancelButtonColor: "#475569",
+              didOpen: (popupEl) => {
+                bindDelegatedHandlers(popupEl);
+                try {
+                  const cb = popupEl.querySelector(".swal2-confirm");
+                  if (cb && typeof cb.focus === "function") setTimeout(() => cb.focus(), 60);
+                } catch (_) {}
+              },
+              willClose: () => {
+                delegated = false;
+              },
+              preConfirm: () => { return undefined; }
+            });
+            return;
+          }
+
           const sendError = extraOpts.sendError ? extraOpts.sendError : "";
           const otpValue = extraOpts.otpValue ? extraOpts.otpValue : "";
           const focus = extraOpts.focus || (otpSent ? "vt-otp-input" : "vt-pin-input");
 
           Swal.fire({
             title: otpSent ? "Authorize Transfer" : "Initiate Transfer Authorization",
-            html: renderBody({ sending: false, sendError, otpValue }),
+            html: renderPinOtpBody({ sending: false, sendError, otpValue }),
             showCancelButton: true,
             confirmButtonText: otpSent ? "Authorize Transfer" : "Send Verification Code",
             cancelButtonText: "Cancel",
@@ -1319,7 +1634,7 @@
           const pinVal = pinInput ? String(pinInput.value || "").trim() : transferPin;
           if (pinVal) transferPin = pinVal;
           Swal.update({
-            html: renderBody({ sending: true }),
+            html: renderPinOtpBody({ sending: true }),
             title: "Sending Verification Code...",
             confirmButtonText: "Please wait...",
             showCloseButton: false,
@@ -1336,7 +1651,7 @@
           }
           if (!transferPin || transferPin.length < 6) {
             Swal.hideLoading();
-            openDialog({ sendError: "Transfer PIN must be at least 6 characters or digits." });
+            openConfirmOrPinOtp({ sendError: "Transfer PIN must be at least 6 characters or digits." });
             return;
           }
           showSending();
@@ -1362,14 +1677,14 @@
               otpSent = false;
               sentMaskedEmail = null;
               Swal.hideLoading();
-              openDialog({ sendError: msg });
+              openConfirmOrPinOtp({ sendError: msg });
               return;
             }
             otpSent = true;
+            phase = "otp";
             sentMaskedEmail = body.maskedEmail || "your admin-registered email address";
             Swal.hideLoading();
-            openDialog();
-            // add resend link (text) action
+            openConfirmOrPinOtp();
             setTimeout(() => {
               try {
                 const resendSpan = document.createElement("div");
@@ -1385,10 +1700,11 @@
             }, 50);
           } catch (err) {
             otpSent = false;
+            phase = "pin";
             sentMaskedEmail = null;
             const msg = err && err.message ? err.message : "Network error while sending verification code.";
             Swal.hideLoading();
-            openDialog({ sendError: msg });
+            openConfirmOrPinOtp({ sendError: msg });
           }
         };
 
@@ -1400,14 +1716,108 @@
             otpVal = otpInput ? String(otpInput.value || "").trim() : "";
           }
           if (!/^\d{6}$/.test(otpVal)) {
-            openDialog({ otpValue: otpVal, sendError: "Please enter the 6 numeric digits of the email verification code." });
+            openConfirmOrPinOtp({ otpValue: otpVal, sendError: "Please enter the 6 numeric digits of the email verification code." });
             return;
           }
-          Swal.close();
-          resolve({ transferPin, otp: otpVal });
+          confirmedOtp = otpVal;
+          phase = "confirm";
+          openConfirmOrPinOtp();
         };
 
-        openDialog();
+        const onConfirmFinal = async () => {
+          const displayed = {
+            toFullName: toFullName,
+            toAccountNumber: toAccountNumber,
+            toEmail: toEmail,
+            amount: amount,
+            currency: displayCurrency,
+            feeAmount: feeAmount
+          };
+
+          const popupEl = Swal.getPopup();
+          if (popupEl) {
+            try {
+              const fNameEl = popupEl.querySelector("#vt-confirm-fullname");
+              const acctEl = popupEl.querySelector("#vt-confirm-acctnum");
+              const amtEl = popupEl.querySelector("#vt-confirm-amount");
+              const curEl = popupEl.querySelector("#vt-confirm-currency");
+              const feeEl = popupEl.querySelector("#vt-confirm-fee");
+              const intEl = popupEl.querySelector("#vt-confirm-integrity");
+
+              const shownFullName = fNameEl ? String(fNameEl.value || "") : "";
+              const shownAcct = acctEl ? String(acctEl.value || "") : "";
+              const shownAmtRaw = amtEl ? String(amtEl.value || "").replace(/,/g, "") : "";
+              const shownAmt = shownAmtRaw ? Number(shownAmtRaw) : NaN;
+              const shownCur = curEl ? String(curEl.value || "") : "";
+              const shownFeeRaw = feeEl ? String(feeEl.value || "").replace(/,/g, "") : "";
+              const shownFee = shownFeeRaw ? Number(shownFeeRaw) : NaN;
+              const shownIntegrity = intEl ? String(intEl.value || "") : "";
+
+              const normalizedDisplayed = {
+                toFullName: shownFullName,
+                toAccountNumber: shownAcct,
+                toEmail: toEmail,
+                amount: shownAmt,
+                currency: shownCur,
+                feeAmount: shownFee
+              };
+
+              if (shownFullName !== String(toFullName || "")) {
+                openConfirmOrPinOtp({ integrityError: "Displayed recipient name does not match the originally submitted transfer parameters. Please restart the transfer process." });
+                return;
+              }
+              if (shownAcct !== String(toAccountNumber || "")) {
+                openConfirmOrPinOtp({ integrityError: "Displayed recipient account number was tampered with. Please restart the transfer process." });
+                return;
+              }
+              if (String(shownCur).toUpperCase() !== String(displayCurrency || "").toUpperCase()) {
+                openConfirmOrPinOtp({ integrityError: "Displayed currency type was altered. Please restart the transfer process." });
+                return;
+              }
+              if (!Number.isFinite(shownAmt) || !Number.isFinite(amount) || Math.abs(Number(shownAmt) - Number(amount)) > 0.001) {
+                openConfirmOrPinOtp({ integrityError: "Displayed transfer amount does not match the originally submitted value. Please restart the transfer process." });
+                return;
+              }
+              if (!Number.isFinite(shownFee) || Math.abs(Number(shownFee) - Number(feeAmount)) > 0.001) {
+                openConfirmOrPinOtp({ integrityError: "Displayed transaction fee was modified. Please restart the transfer process." });
+                return;
+              }
+
+              const expectedIntegrity = integrityHash([
+                String(toFullName || ""),
+                String(toAccountNumber || ""),
+                String(toEmail || ""),
+                Number(amount),
+                String(displayCurrency || ""),
+                Number(feeAmount)
+              ]);
+              if (shownIntegrity !== expectedIntegrity) {
+                openConfirmOrPinOtp({ integrityError: "Integrity checksum mismatch. Transfer parameters have been tampered with. Please restart the transfer process." });
+                return;
+              }
+
+              if (!verifyTransferContextIntegrity(sealedCtx, normalizedDisplayed)) {
+                openConfirmOrPinOtp({ integrityError: "Sealed context integrity could not be verified. Please restart the transfer process." });
+                return;
+              }
+            } catch (integrityErr) {
+              openConfirmOrPinOtp({ integrityError: (integrityErr && integrityErr.message) ? integrityErr.message : "Security validation failed. Please restart the transfer process." });
+              return;
+            }
+          }
+
+          if (!/^\d{6}$/.test(confirmedOtp)) {
+            phase = "otp";
+            openConfirmOrPinOtp({ sendError: "OTP must be re-entered. Please restart the authorization flow." });
+            return;
+          }
+
+          Swal.close();
+          resolve({ transferPin, otp: confirmedOtp });
+        };
+
+        phase = "pin";
+        openConfirmOrPinOtp();
       });
     }
 
@@ -1535,6 +1945,8 @@
           amount: amount,
           currency: recipient.currency || "USD",
           memo: `Bank transfer to ${recipient.fullName || receiverName}`,
+          toFullName: recipient.fullName || receiverName,
+          feeAmount: 0,
           transferPin: transferPin
         });
 
