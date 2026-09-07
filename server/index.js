@@ -431,6 +431,36 @@ function isSixDigitPin(value) {
   return /^\d{6}$/.test(String(value || "").trim());
 }
 
+function isAdminGeneratedAccount(userDataOrUid) {
+  if (!userDataOrUid) return false;
+  const userData =
+    typeof userDataOrUid === "string"
+      ? (() => {
+          try {
+            const localUsers = readLocalUsers();
+            return localUsers[userDataOrUid] || null;
+          } catch (_) {
+            return null;
+          }
+        })()
+      : userDataOrUid;
+
+  if (!userData || typeof userData !== "object") return false;
+
+  if (userData.adminGenerated === true) return true;
+
+  if (userData.createdBy && typeof userData.createdBy === "string" && userData.createdBy.trim()) {
+    return true;
+  }
+
+  const security = userData.security || {};
+  if (security.accountCreatedOtp) return true;
+
+  if (userData._adminCreated === true) return true;
+
+  return false;
+}
+
 const OTP_AUDIT_DIR = path.resolve(__dirname, "..", "logs", "email-audit");
 (function ensureOtpAuditDir() {
   try {
@@ -1119,6 +1149,50 @@ app.put("/api/profile", requireAuth, async (req, res) => {
 
   const prof = typeof existingSnapshot?.profile === "object" && existingSnapshot.profile ? existingSnapshot.profile : ((req.user?.profile) || {});
   const sec = typeof existingSnapshot?.security === "object" && existingSnapshot.security ? existingSnapshot.security : ((req.user?.security) || {});
+
+  if (isAdminGeneratedAccount(existingSnapshot) || isAdminGeneratedAccount(uid)) {
+    const finalPicUrl = String(
+      prof?.profilePic || prof?.photoURL || prof?.photo || prof?.avatar ||
+      sec?.profilePic || sec?.photoURL || sec?.photo || sec?.avatar || ""
+    );
+    const kycCompleted = hasKycCompleted({ profile: prof, security: sec, ...existingSnapshot });
+    const obRequired = !hasKycCompleted({ profile: prof, security: sec, ...existingSnapshot }) || !hasProfilePic({ profile: prof, security: sec, ...existingSnapshot });
+    res.status(403).json({
+      error: "This account was created by an administrator and all account details are permanently locked. No profile, KYC, security setting, or personal detail changes may be made from the customer dashboard. The original account values embedded at creation time are preserved for all admin reviews.",
+      ok: false,
+      profilePic: finalPicUrl,
+      photoURL: finalPicUrl,
+      photo: finalPicUrl,
+      avatar: finalPicUrl,
+      kycCompleted,
+      kycDone: kycCompleted,
+      KYCDone: kycCompleted,
+      onboarding: {
+        required: obRequired,
+        kycCompleted,
+        profilePicUploaded: hasProfilePic({ profile: prof, security: sec, ...existingSnapshot })
+      },
+      profile: Object.assign({}, prof || {}, {
+        kycCompleted,
+        kycDone: kycCompleted,
+        KYCDone: kycCompleted,
+        profilePic: finalPicUrl,
+        photoURL: finalPicUrl,
+        photo: finalPicUrl,
+        avatar: finalPicUrl
+      }),
+      security: Object.assign({}, sec || {}, {
+        kycCompleted,
+        kycDone: kycCompleted,
+        KYCDone: kycCompleted,
+        profilePic: finalPicUrl,
+        photoURL: finalPicUrl,
+        photo: finalPicUrl,
+        avatar: finalPicUrl
+      })
+    });
+    return;
+  }
 
   const newProfile = Object.assign({}, prof);
   const newSecurity = Object.assign({}, sec);
@@ -2570,6 +2644,9 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
       email,
       createdAt: nowIso,
       updatedAt: nowIso,
+      adminGenerated: true,
+      createdBy: req.admin?.email || null,
+      _adminCreated: true,
       profile: {
         email,
         firstname,
@@ -2759,6 +2836,26 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
     res.status(400).json({ error: "Missing user id." });
     return;
   }
+
+  try {
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const existingSnap = await userRef.get().catch(() => null);
+    let existingData = null;
+    if (existingSnap && existingSnap.exists) {
+      existingData = existingSnap.data() || {};
+    } else {
+      const localUsers = readLocalUsers();
+      existingData = localUsers[uid] || null;
+    }
+
+    if (isAdminGeneratedAccount(existingData) || isAdminGeneratedAccount(uid)) {
+      res.status(403).json({
+        error: "Admin-generated accounts are permanently locked and cannot be modified. All original account details (balance, status, profile, credentials) are immutable post-creation. No edits, patches, or updates of any kind are permitted for accounts created through the admin dashboard."
+      });
+      return;
+    }
+  } catch (_) {}
 
   const updates = {
     updatedAt: new Date().toISOString()
@@ -2968,6 +3065,26 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
 
   try {
     const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get().catch(() => null);
+    let userData = null;
+    if (userSnap && userSnap.exists) {
+      userData = userSnap.data() || {};
+    } else {
+      const localUsers = readLocalUsers();
+      userData = localUsers[uid] || null;
+    }
+
+    if (isAdminGeneratedAccount(userData) || isAdminGeneratedAccount(uid)) {
+      res.status(403).json({
+        error: "Admin-generated accounts are permanently locked and cannot be deleted. All original account details are preserved indefinitely for accounts created through the admin dashboard. No deletion, purge, or removal actions are permitted."
+      });
+      return;
+    }
+  } catch (_) {}
+
+  try {
+    const db = getFirestore();
     const auth = getAuth();
 
     const userRef = db.collection("users").doc(uid);
@@ -2977,6 +3094,12 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       // Check if user exists only in local store
       const localUsers = readLocalUsers();
       if (localUsers[uid]) {
+        if (isAdminGeneratedAccount(localUsers[uid]) || isAdminGeneratedAccount(uid)) {
+          res.status(403).json({
+            error: "Admin-generated accounts are permanently locked and cannot be deleted. All original account details are preserved indefinitely."
+          });
+          return;
+        }
         delete localUsers[uid];
         writeLocalUsers(localUsers);
         // Also clear local transactions
@@ -3233,6 +3356,7 @@ app.get("/api/admin/contact-messages", requireAdminAuth, async (req, res) => {
 
 app.post("/api/admin/clear-users", requireAdminAuth, async (req, res) => {
   let deletedCount = 0;
+  let preservedCount = 0;
   let firestoreFailed = false;
 
   try {
@@ -3243,6 +3367,13 @@ app.post("/api/admin/clear-users", requireAdminAuth, async (req, res) => {
 
     for (const userDoc of usersSnap.docs) {
       const uid = userDoc.id;
+      const userData = userDoc.exists ? (userDoc.data() || {}) : null;
+
+      if (isAdminGeneratedAccount(userData) || isAdminGeneratedAccount(uid)) {
+        preservedCount++;
+        continue;
+      }
+
       try {
         await auth.deleteUser(uid);
       } catch (_) {}
@@ -3292,16 +3423,31 @@ app.post("/api/admin/clear-users", requireAdminAuth, async (req, res) => {
   // Also clear local storage (always - sync with Firestore or use local-only)
   try {
     const localUsers = readLocalUsers();
-    const localCount = Object.keys(localUsers).length;
-    if (localCount > 0) {
-      writeLocalUsers({});
-      deletedCount += localCount;
+    const preservedLocal = {};
+    let localDeleted = 0;
+    for (const [uid, data] of Object.entries(localUsers)) {
+      if (isAdminGeneratedAccount(data) || isAdminGeneratedAccount(uid)) {
+        preservedLocal[uid] = data;
+        preservedCount++;
+      } else {
+        localDeleted++;
+      }
     }
-    writeLocalTransactions({});
+    writeLocalUsers(preservedLocal);
+    deletedCount += localDeleted;
+
+    const localTxs = readLocalTransactions();
+    const preservedTxs = {};
+    for (const [uid, txData] of Object.entries(localTxs)) {
+      if (isAdminGeneratedAccount(uid) || (preservedLocal[uid])) {
+        preservedTxs[uid] = txData;
+      }
+    }
+    writeLocalTransactions(preservedTxs);
   } catch (_) {}
 
-  console.log(`[ADMIN] Bulk cleared ${deletedCount} user accounts by ${req.admin?.email || "admin"}${firestoreFailed ? " (local only)" : ""}`);
-  res.json({ ok: true, message: `Successfully cleared ${deletedCount} old customer account(s).`, deletedCount, firestoreFallback: firestoreFailed });
+  console.log(`[ADMIN] Bulk cleared ${deletedCount} user accounts by ${req.admin?.email || "admin"}${firestoreFailed ? " (local only)" : ""} (${preservedCount} admin-generated accounts preserved)`);
+  res.json({ ok: true, message: `Successfully cleared ${deletedCount} old customer account(s). ${preservedCount > 0 ? `(${preservedCount} admin-generated account(s) permanently preserved and not cleared.)` : ""}`, deletedCount, preservedCount, firestoreFallback: firestoreFailed });
 });
 
 function sendHtmlFile(res, absPath) {
