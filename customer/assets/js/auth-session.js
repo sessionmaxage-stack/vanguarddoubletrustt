@@ -1172,7 +1172,7 @@
         let transferPin = "";
         let otpSent = false;
         let sentMaskedEmail = null;
-        let dialogEl = null;
+        let delegated = false;
 
         const renderBody = (opts = {}) => {
           const sending = Boolean(opts.sending);
@@ -1237,40 +1237,46 @@
           `;
         };
 
-        const buttons = () => {
-          if (!otpSent) {
-            return {
-              sendOtp: {
-                text: "Send Verification Code",
-                value: "sendOtp",
-                className: "swal2-confirm",
-                closeModal: false
-              },
-              cancel: {
-                text: "Cancel",
-                value: "cancel",
-                className: "swal2-cancel"
-              }
-            };
-          }
-          return {
-            authorize: {
-              text: "Authorize Transfer",
-              value: "authorize",
-              className: "swal2-confirm"
-            },
-            resend: {
-              text: "Resend OTP",
-              value: "resend",
-              className: "swal2-cancel",
-              closeModal: false
-            },
-            cancel: {
-              text: "Cancel",
-              value: "cancel",
-              className: "swal2-cancel"
+        const bindDelegatedHandlers = (popupEl) => {
+          if (delegated || !popupEl) return;
+          delegated = true;
+          popupEl.addEventListener("click", (ev) => {
+            const confirmBtn = ev.target.closest && ev.target.closest(".swal2-confirm");
+            const cancelBtn = ev.target.closest && ev.target.closest(".swal2-cancel");
+            const resendBtn = ev.target.closest && ev.target.closest("#vt-resend-btn");
+            if (resendBtn) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              (async () => { try { await onSendOtp(); } catch (_) {} })();
+              return;
             }
-          };
+            if (confirmBtn) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              (async () => {
+                if (!otpSent) await onSendOtp();
+                else await onAuthorize();
+              })();
+              return;
+            }
+            if (cancelBtn) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              try { Swal.close(); } catch (_) {}
+              resolve(null);
+            }
+          });
+          popupEl.addEventListener("keydown", (ev) => {
+            if (ev.key === "Enter") {
+              const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : "";
+              if (tag === "textarea") return;
+              ev.preventDefault();
+              (async () => {
+                if (!otpSent) await onSendOtp();
+                else await onAuthorize();
+              })();
+            }
+          });
         };
 
         const openDialog = (extraOpts = {}) => {
@@ -1278,10 +1284,10 @@
           const otpValue = extraOpts.otpValue ? extraOpts.otpValue : "";
           const focus = extraOpts.focus || (otpSent ? "vt-otp-input" : "vt-pin-input");
 
-          dialogEl = Swal.fire({
+          Swal.fire({
             title: otpSent ? "Authorize Transfer" : "Initiate Transfer Authorization",
             html: renderBody({ sending: false, sendError, otpValue }),
-            showCancelButton: false,
+            showCancelButton: true,
             confirmButtonText: otpSent ? "Authorize Transfer" : "Send Verification Code",
             cancelButtonText: "Cancel",
             showConfirmButton: true,
@@ -1292,39 +1298,14 @@
             buttonsStyling: true,
             confirmButtonColor: "#0f172a",
             didOpen: (popupEl) => {
-              dialogEl = popupEl;
+              bindDelegatedHandlers(popupEl);
               try {
                 const f = popupEl.querySelector("#" + focus);
-                if (f && typeof f.focus === "function") f.focus();
-              } catch (_) {}
-              // Bind confirm button manually — SweetAlert v10 buttons config isn't always object-map
-              try {
-                const confirmBtn = popupEl.querySelector('.swal2-confirm');
-                if (confirmBtn) {
-                  confirmBtn.addEventListener('click', async (ev) => {
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    if (!otpSent) await onSendOtp();
-                    else await onAuthorize();
-                  });
-                }
-                const cancelBtn = popupEl.querySelector('.swal2-cancel');
-                if (cancelBtn) {
-                  cancelBtn.addEventListener('click', (ev) => {
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    try { Swal.close(); } catch (_) {}
-                    resolve(null);
-                  });
-                }
-                if (otpSent) {
-                  const resendBtn = popupEl.querySelector('#vt-resend-btn');
-                  // (resend handled via button; fallback — no separate button element; use Swal click)
-                }
+                if (f && typeof f.focus === "function") setTimeout(() => f.focus(), 50);
               } catch (_) {}
             },
             willClose: () => {
-              // nothing
+              delegated = false;
             },
             preConfirm: () => { return undefined; }
           });
@@ -1333,6 +1314,7 @@
         const showSending = () => {
           const popupEl = Swal.getPopup();
           if (!popupEl) return;
+          bindDelegatedHandlers(popupEl);
           const pinInput = popupEl.querySelector("#vt-pin-input");
           const pinVal = pinInput ? String(pinInput.value || "").trim() : transferPin;
           if (pinVal) transferPin = pinVal;
