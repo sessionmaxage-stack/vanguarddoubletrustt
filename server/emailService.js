@@ -1,5 +1,9 @@
 const nodemailer = require("nodemailer");
 
+let cachedTransporter = null;
+let cachedConfigSig = "";
+let cachedVerifyResult = { ok: false, checkedAt: 0 };
+
 function maskEmail(email) {
   if (!email || typeof email !== "string") return "";
   const parts = email.split("@");
@@ -35,13 +39,21 @@ function getFromAddress() {
 
 function getMailTransporter() {
   const { host, port, user, pass, service, secure } = getSmtpConfig();
+  const sig = `${service || ""}|${host || ""}:${port}|${secure}|${user}|${pass ? String(pass).slice(0,8) : ""}`;
+  if (cachedTransporter && cachedConfigSig === sig) {
+    return cachedTransporter;
+  }
+  cachedTransporter = null;
+  cachedConfigSig = sig;
+  cachedVerifyResult = { ok: false, checkedAt: 0 };
 
   if (service && user && pass) {
     try {
-      return nodemailer.createTransport({
+      cachedTransporter = nodemailer.createTransport({
         service,
         auth: { user, pass }
       });
+      return cachedTransporter;
     } catch (createErr) {
       console.error(
         `[EmailService] Failed to create service-based transport (${service}): ${createErr.message}`
@@ -52,12 +64,13 @@ function getMailTransporter() {
 
   if (host && user && pass) {
     try {
-      return nodemailer.createTransport({
+      cachedTransporter = nodemailer.createTransport({
         host,
         port,
         secure,
         auth: { user, pass }
       });
+      return cachedTransporter;
     } catch (createErr) {
       console.error(
         `[EmailService] Failed to create host-based transport (${host}:${port}): ${createErr.message}`
@@ -73,12 +86,20 @@ function getMailTransporter() {
   return null;
 }
 
-async function verifyMailTransporter(transporter) {
+async function verifyMailTransporter(transporter, opts = {}) {
   if (!transporter || typeof transporter.verify !== "function") return false;
+  const force = Boolean(opts.force);
+  const maxAgeMs = Number.isFinite(Number(opts.maxAgeMs)) ? Number(opts.maxAgeMs) : 10 * 60 * 1000;
+  const now = Date.now();
+  if (!force && cachedVerifyResult.ok && cachedVerifyResult.transporter === transporter && (now - cachedVerifyResult.checkedAt) < maxAgeMs) {
+    return true;
+  }
   try {
     await transporter.verify();
+    cachedVerifyResult = { ok: true, transporter, checkedAt: now };
     return true;
   } catch (verifyErr) {
+    cachedVerifyResult = { ok: false, transporter, checkedAt: now };
     console.error(
       `[EmailService] SMTP transport verify() failed: ${
         verifyErr && verifyErr.message ? verifyErr.message : verifyErr
@@ -96,7 +117,7 @@ function validateRecipient(email) {
   return { valid: true, email: cleanEmail };
 }
 
-async function sendMail({ to, subject, text, html, from }) {
+async function sendMail({ to, subject, text, html, from, extraHeaders }) {
   const recipientCheck = validateRecipient(to);
   if (!recipientCheck.valid) {
     const err = new Error(
@@ -113,8 +134,19 @@ async function sendMail({ to, subject, text, html, from }) {
   }
 
   const cleanTo = recipientCheck.email;
-  const cleanFrom = from || getFromAddress();
+  let cleanFrom = String(from || getFromAddress()).trim();
+  const smtpCfg = getSmtpConfig();
+  const smtpUser = String(smtpCfg.user || "").trim().toLowerCase();
+  if (smtpUser && /gmail\.com$/i.test(smtpUser)) {
+    const m = cleanFrom.match(/<([^>]+)>\s*$/);
+    const addr = (m && m[1]) ? String(m[1]).trim().toLowerCase() : cleanFrom.toLowerCase().replace(/^["']|["']$/g, "");
+    if (addr !== smtpUser) {
+      const display = cleanFrom.replace(/<[^>]+>\s*$/, "").trim() || "VanguardDoubleTrust Security";
+      cleanFrom = `"${display.replace(/^"|"$/g, "")}" <${smtpUser}>`;
+    }
+  }
   const maskedTo = maskEmail(cleanTo);
+  const replyTo = String(smtpUser || cleanFrom.replace(/^.*<([^>]+)>\s*$/, "$1") || "").trim();
 
   console.log(
     `[EmailService] Initiating email dispatch to ${maskedTo}. Subject: "${String(subject).slice(0, 80)}"`
@@ -129,7 +161,7 @@ async function sendMail({ to, subject, text, html, from }) {
     throw err;
   }
 
-  const transportReady = await verifyMailTransporter(transporter);
+  const transportReady = await verifyMailTransporter(transporter, { maxAgeMs: 10 * 60 * 1000 });
   if (!transportReady) {
     const err = new Error(
       "Outbound email service is not responding. SMTP verification failed — please check your SMTP credentials or try again later."
@@ -142,9 +174,25 @@ async function sendMail({ to, subject, text, html, from }) {
     const sent = await transporter.sendMail({
       from: cleanFrom,
       to: cleanTo,
+      replyTo: replyTo,
       subject,
       text: text || undefined,
-      html: html || undefined
+      html: html || undefined,
+      headers: Object.assign(
+        {
+          "X-Mailer": "VanguardDoubleTrust SecureMail v1.0",
+          "X-VT-Service": "vanguarddoubletrust",
+          "X-VT-Audit-Id": `audit-${Date.now()}-${require("crypto").randomBytes(6).toString("hex")}`,
+          "X-VT-OTP-Expires": "900",
+          "X-VT-OTP-Window-Mins": "15",
+          "X-Priority": "1 (Highest)",
+          "X-MSMail-Priority": "High",
+          "Importance": "High",
+          "X-Auto-Response-Suppress": "All,OOF,DR,RN,NRN,AutoReply",
+          "List-Unsubscribe": "<mailto:security@vanguarddoubletrust.com?subject=unsubscribe-security-alerts>"
+        },
+        extraHeaders && typeof extraHeaders === "object" && !Array.isArray(extraHeaders) ? extraHeaders : {}
+      )
     });
 
     const acceptedOk = Array.isArray(sent.accepted) && sent.accepted.includes(cleanTo);
@@ -169,7 +217,9 @@ async function sendMail({ to, subject, text, html, from }) {
       maskedEmail: maskedTo,
       timestamp: new Date().toISOString(),
       messageId: sent.messageId || null,
-      accepted: Boolean(acceptedOk)
+      accepted: Boolean(acceptedOk),
+      response: sent.response || "",
+      envelope: sent.envelope || null
     };
   } catch (mailErr) {
     console.error(
