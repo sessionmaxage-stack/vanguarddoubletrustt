@@ -1335,13 +1335,8 @@
             transferPin = pinInput ? String(pinInput.value || "").trim() : "";
           }
           if (!transferPin || transferPin.length < 6) {
-            Swal.update({
-              html: renderBody({ sending:false, sendError: "Transfer PIN must be at least 6 characters or digits." }),
-              title: "Initiate Transfer Authorization",
-              confirmButtonText: "Send Verification Code",
-              showCloseButton: true
-            });
             Swal.hideLoading();
+            openDialog({ sendError: "Transfer PIN must be at least 6 characters or digits." });
             return;
           }
           showSending();
@@ -1367,54 +1362,33 @@
               otpSent = false;
               sentMaskedEmail = null;
               Swal.hideLoading();
-              Swal.update({
-                html: renderBody({ sendError: msg }),
-                title: "Initiate Transfer Authorization",
-                confirmButtonText: "Send Verification Code",
-                showCloseButton: true
-              });
-              if (popupEl) {
-                const p2 = popupEl.querySelector("#vt-pin-input");
-                if (p2) setTimeout(() => p2.focus(), 100);
-              }
+              openDialog({ sendError: msg });
               return;
             }
             otpSent = true;
             sentMaskedEmail = body.maskedEmail || "your admin-registered email address";
             Swal.hideLoading();
-            Swal.update({
-              html: renderBody({}),
-              title: "Authorize Transfer",
-              confirmButtonText: "Authorize Transfer",
-              showCloseButton: true
-            });
+            openDialog();
             // add resend link (text) action
-            try {
-              const resendSpan = document.createElement("div");
-              resendSpan.id = "vt-resend-wrap";
-              resendSpan.style.textAlign = "center";
-              resendSpan.style.margin = "14px 0 0";
-              resendSpan.innerHTML = `<a id="vt-resend-btn" href="javascript:void(0)" style="color:#475569;font-size:12px;text-decoration:underline;">Didn't get the email? Resend verification code</a>`;
-              const wrap = Swal.getHtmlContainer();
-              if (wrap) wrap.appendChild(resendSpan);
-              const rb = document.getElementById("vt-resend-btn");
-              if (rb) rb.onclick = async () => { await onSendOtp(); };
-            } catch (_) {}
             setTimeout(() => {
-              const o = document.getElementById("vt-otp-input");
-              if (o) o.focus();
-            }, 150);
+              try {
+                const resendSpan = document.createElement("div");
+                resendSpan.id = "vt-resend-wrap";
+                resendSpan.style.textAlign = "center";
+                resendSpan.style.margin = "14px 0 0";
+                resendSpan.innerHTML = `<a id="vt-resend-btn" href="javascript:void(0)" style="color:#475569;font-size:12px;text-decoration:underline;">Didn't get the email? Resend verification code</a>`;
+                const wrap = Swal.getHtmlContainer();
+                if (wrap) wrap.appendChild(resendSpan);
+                const rb = document.getElementById("vt-resend-btn");
+                if (rb) rb.onclick = async () => { await onSendOtp(); };
+              } catch (_) {}
+            }, 50);
           } catch (err) {
             otpSent = false;
             sentMaskedEmail = null;
             const msg = err && err.message ? err.message : "Network error while sending verification code.";
             Swal.hideLoading();
-            Swal.update({
-              html: renderBody({ sendError: msg }),
-              title: "Initiate Transfer Authorization",
-              confirmButtonText: "Send Verification Code",
-              showCloseButton: true
-            });
+            openDialog({ sendError: msg });
           }
         };
 
@@ -1426,9 +1400,7 @@
             otpVal = otpInput ? String(otpInput.value || "").trim() : "";
           }
           if (!/^\d{6}$/.test(otpVal)) {
-            Swal.update({
-              html: renderBody({ otpValue: otpVal, sendError: "Please enter the 6 numeric digits of the email verification code." })
-            });
+            openDialog({ otpValue: otpVal, sendError: "Please enter the 6 numeric digits of the email verification code." });
             return;
           }
           Swal.close();

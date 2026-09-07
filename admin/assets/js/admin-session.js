@@ -100,9 +100,9 @@
       lines.push(`Account PIN: ${creds?.accountPin || ""}`);
       lines.push(`Transfer Code: ${creds?.transferCode || ""}`);
     } else {
-      lines.push("Login Password: <use Regenerate Credentials below>");
-      lines.push("Account PIN: <use Regenerate Credentials below>");
-      lines.push("Transfer Code: <use Regenerate Credentials below>");
+      lines.push("Login Password: <displayed at account creation>");
+      lines.push("Account PIN: <displayed at account creation>");
+      lines.push("Transfer Code: <displayed at account creation>");
     }
     lines.push("");
     return lines.join("\n");
@@ -271,10 +271,9 @@
 
     const credsHtml = `
       <div class="review-panel review-creds">
-        <h4>Account Credentials (manually resend to customer)</h4>
-        <div class="warn">⚠️ Plaintext passwords & PINs are never stored. Use Regenerate Credentials to produce a new fresh set that you can copy and send to the customer. Regenerating invalidates the old password/PIN/transfer code and logs them out.</div>
+        <h4>Account Credentials</h4>
+        <div class="warn">ℹ️ Account credentials are displayed once at account creation. Passwords and PINs are securely hashed and never stored in plaintext. Copy credentials from the creation output before closing the new-account modal.</div>
         <div class="creds-actions">
-          <button class="btn" id="reviewRegenerateBtn" type="button">Regenerate Credentials</button>
           <button class="btn-secondary" id="reviewCopyBtn" type="button">Copy to Clipboard</button>
         </div>
         <textarea id="reviewCredsOutput" spellcheck="false" readonly>${escapeHtml(initialCredsText)}</textarea>
@@ -285,9 +284,7 @@
       `<div class="review-grid">${profileHtml}${accountHtml}${secHtml}${txsHtml}${credsHtml}</div>`
     );
 
-    const regenBtn = document.getElementById("reviewRegenerateBtn");
     const copyBtn = document.getElementById("reviewCopyBtn");
-    regenBtn?.addEventListener("click", onRegenerateCreds);
     copyBtn?.addEventListener("click", onCopyCreds);
   }
 
@@ -870,6 +867,7 @@
           value="${escapeHtml(user.accountNumber || "")}"
           placeholder="Account number"
           style="margin-bottom:8px"
+          disabled
         />
 
         <div class="sub">
@@ -884,11 +882,12 @@
           min="0"
           data-field="balance"
           value="${Number(user.balance || 0)}"
+          disabled
         />
       </td>
 
       <td>
-        <select data-field="status">
+        <select data-field="status" disabled>
 
           <option
             value="ACTIVE"
@@ -948,6 +947,7 @@
           value="${escapeHtml(user.firstname || "")}"
           placeholder="First name"
           style="margin-bottom:8px"
+          disabled
         />
 
         <input
@@ -955,6 +955,7 @@
           data-field="lastname"
           value="${escapeHtml(user.lastname || "")}"
           placeholder="Last name"
+          disabled
         />
       </td>
 
@@ -970,18 +971,25 @@
             class="btn"
             type="button"
             data-action="save"
+            disabled
+            title="Admin-generated accounts are locked and cannot be modified."
+            style="opacity:0.55;cursor:not-allowed;"
           >
-            Save / Repair
+            🔒 Locked
           </button>
 
           <button
             class="btn-secondary"
             type="button"
             data-action="delete"
+            disabled
             style="
               border-color:rgba(239,68,68,.45);
               color:#fecaca;
+              opacity:0.55;
+              cursor:not-allowed;
             "
+            title="Admin-generated accounts are locked and cannot be deleted."
           >
             Delete
           </button>
@@ -1042,77 +1050,12 @@
       const deleteButton = event.target.closest("[data-action='delete']");
 
 if (deleteButton) {
-  const row = deleteButton.closest("tr[data-uid]");
-
-  if (!row) return;
-
-  const uid = row.getAttribute("data-uid");
-
-  if (!uid) return;
-
-  const name =
-    row.querySelector(".name")?.textContent?.trim() ||
-    "this customer";
-
-  const accountNumber =
-    row.querySelector("[data-field='accountNumber']")?.value?.trim() ||
-    "";
-
-  const confirmed = window.confirm(
-    `PERMANENTLY DELETE CUSTOMER?\n\n` +
-    `Customer: ${name}\n` +
-    `Account: ${accountNumber || "Unknown"}\n\n` +
-    `This will remove the customer's login and account data from the platform.\n\n` +
-    `This action cannot be undone.\n\n` +
-    `Click OK to permanently delete this customer.`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  deleteButton.disabled = true;
-  deleteButton.textContent = "Deleting...";
-  flash("");
-
-  try {
-    await api(
-      `/api/admin/users/${encodeURIComponent(uid)}`,
-      {
-        method: "DELETE"
-      }
-    );
-
-    flash("Customer account permanently deleted.");
-
-    /*
-     * Close the review modal if the deleted customer
-     * happens to be open there.
-     */
-    if (reviewState?.uid === uid) {
-      setReviewOpen(false);
-    }
-
-    /*
-     * Reload the existing customer list and totals.
-     */
-    await loadUsers();
-
-  } catch (error) {
-
-    flash(
-      error?.message ||
-        "Unable to permanently delete customer.",
-      true
-    );
-
-    deleteButton.disabled = false;
-    deleteButton.textContent = "Delete";
-  }
-
+  flash("Admin-generated accounts are locked and cannot be deleted. No modifications are permitted to accounts created by the admin dashboard.", true);
   return;
 }
       if (!button) return;
+      flash("Admin-generated accounts are locked and cannot be modified. No edits to account number, balance, status, or names are permitted for admin-created accounts.", true);
+      return;
 
       const row = button.closest("tr[data-uid]");
       if (!row) return;
