@@ -168,6 +168,11 @@ try {
   console.warn(`[Email Service] Nodemailer could not be loaded: ${nmErr && nmErr.message ? nmErr.message : nmErr}`);
 }
 
+let _cachedTransporter = null;
+let _cachedConfigSig = "";
+let _cachedVerifyResult = { ok: false, checkedAt: 0, transporter: null };
+let _lastSuccessfulSendAt = 0;
+
 /**
  * Creates an isolated Nodemailer transport configured exclusively from
  * environment variables. Returns null if Nodemailer is not installed or
@@ -188,13 +193,37 @@ function getMailTransporter() {
   const user = process.env.SMTP_USER || process.env.MAIL_USER || process.env.GMAIL_USER;
   const pass = process.env.SMTP_PASS || process.env.MAIL_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS;
   const service = process.env.SMTP_SERVICE || process.env.MAIL_SERVICE;
+  const secure = port === 465 || String(process.env.SMTP_SECURE || "").toLowerCase() === "true";
+  const sig = `${service || ""}|${host || ""}:${port}|${secure}|${user}|${pass ? String(pass).slice(0, 8) : ""}`;
+
+  if (_cachedTransporter && _cachedConfigSig === sig) {
+    return _cachedTransporter;
+  }
+  _cachedTransporter = null;
+  _cachedConfigSig = sig;
+  _cachedVerifyResult = { ok: false, checkedAt: 0, transporter: null };
+
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+  const connectionTimeout = Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || (isRender ? 8000 : 20000));
+  const greetingTimeout = Number(process.env.SMTP_GREETING_TIMEOUT_MS || (isRender ? 10000 : 30000));
+  const socketTimeout = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || (isRender ? 20000 : 60000));
+  const pool = isRender ? false : Boolean(process.env.SMTP_POOL_ENABLED !== "false");
+  const maxConnections = Number(process.env.SMTP_MAX_CONNECTIONS || 1);
 
   if (service && user && pass) {
     try {
-      return nodemailer.createTransport({
+      _cachedTransporter = nodemailer.createTransport({
         service,
-        auth: { user, pass }
+        auth: { user, pass },
+        pool,
+        maxConnections,
+        connectionTimeout,
+        greetingTimeout,
+        socketTimeout,
+        logger: false,
+        debug: false
       });
+      return _cachedTransporter;
     } catch (createErr) {
       console.error(`[Email Service] Failed to create service-based transport (${service}): ${createErr.message}`);
       return null;
@@ -203,12 +232,22 @@ function getMailTransporter() {
 
   if (host && user && pass) {
     try {
-      return nodemailer.createTransport({
+      _cachedTransporter = nodemailer.createTransport({
         host,
         port,
-        secure: port === 465 || String(process.env.SMTP_SECURE || "").toLowerCase() === "true",
-        auth: { user, pass }
+        secure,
+        auth: { user, pass },
+        pool,
+        maxConnections,
+        connectionTimeout,
+        greetingTimeout,
+        socketTimeout,
+        tls: { rejectUnauthorized: port !== 587 },
+        requireTLS: port === 587,
+        logger: false,
+        debug: false
       });
+      return _cachedTransporter;
     } catch (createErr) {
       console.error(`[Email Service] Failed to create host-based transport (${host}:${port}): ${createErr.message}`);
       return null;
@@ -227,14 +266,55 @@ function getMailTransporter() {
  * transporter.verify() when the service is first used.
  * Logs (but does not throw) on failure so callers remain isolated.
  */
-async function verifyMailTransporter(transporter) {
+async function verifyMailTransporter(transporter, opts = {}) {
   if (!transporter || typeof transporter.verify !== "function") return false;
+  const force = Boolean(opts && opts.force);
+  const maxAgeMs = Number.isFinite(Number(opts && opts.maxAgeMs)) ? Number(opts.maxAgeMs) : 30 * 60 * 1000;
+  const now = Date.now();
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+  const successWindowMs = Number(process.env.SMTP_LIVENESS_WINDOW_MS || 60 * 60 * 1000);
+
+  if (!force) {
+    if (_cachedVerifyResult.ok && _cachedVerifyResult.transporter === transporter && (now - _cachedVerifyResult.checkedAt) < maxAgeMs) {
+      return true;
+    }
+    if (_lastSuccessfulSendAt > 0 && (now - _lastSuccessfulSendAt) < successWindowMs) {
+      return true;
+    }
+  }
+
+  const verifyTimeoutMs = Number((opts && opts.timeoutMs) || (isRender ? Number(process.env.SMTP_VERIFY_TIMEOUT_MS || 7000) : Number(process.env.SMTP_VERIFY_TIMEOUT_MS || 15000)));
+  let timeoutHandle = null;
+  let verifyDone = false;
+
   try {
-    await transporter.verify();
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        if (!verifyDone) {
+          reject(new Error(`SMTP verify() timed out after ${verifyTimeoutMs}ms`));
+        }
+      }, verifyTimeoutMs);
+    });
+    const verifyPromise = Promise.resolve().then(async () => {
+      try {
+        const result = await transporter.verify();
+        return result;
+      } finally {
+        verifyDone = true;
+      }
+    });
+    await Promise.race([verifyPromise, timeoutPromise]);
+    _cachedVerifyResult = { ok: true, transporter, checkedAt: now };
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     return true;
   } catch (verifyErr) {
-    console.error(`[Email Service] SMTP transport verify() failed: ${verifyErr && verifyErr.message ? verifyErr.message : verifyErr}`);
-    return false;
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    _cachedVerifyResult = { ok: false, transporter, checkedAt: now };
+    const msg = verifyErr && verifyErr.message ? verifyErr.message : verifyErr;
+    console.warn(
+      `[Email Service] SMTP transport verify() did not succeed (${msg}). Will attempt direct send anyway.`
+    );
+    return isRender ? true : false;
   }
 }
 
@@ -340,7 +420,10 @@ async function sendTransferOtpEmail(recipientEmail, recipientName, otp, transfer
     throw err;
   }
 
-  const transportReady = await verifyMailTransporter(transporter);
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+  const sendTimeoutMs = Number(process.env.SMTP_SEND_TIMEOUT_MS || (isRender ? 25000 : 60000));
+
+  const transportReady = await verifyMailTransporter(transporter, { maxAgeMs: 30 * 60 * 1000 });
   if (!transportReady) {
     const err = new Error("Outbound email service is not responding. SMTP verification failed — please check your SMTP credentials or try again later.");
     console.error(`[Email Service] Transfer OTP email send FAILED (transport not ready): ${err.message}`);
@@ -350,14 +433,31 @@ async function sendTransferOtpEmail(recipientEmail, recipientName, otp, transfer
   const message = buildTransferOtpMessage(cleanName, otpCode, transferContext);
   const fromAddr = process.env.SMTP_FROM || process.env.MAIL_FROM || `"VanguardDoubleTrust Security" <${process.env.SMTP_USER || process.env.MAIL_USER || "security@vanguarddoubletrust.com"}>`;
 
+  let sendTimeoutHandle = null;
+  let sendDone = false;
   try {
-    const sent = await transporter.sendMail({
-      from: fromAddr,
-      to: cleanEmail,
-      subject: message.subject,
-      text: message.text,
-      html: message.html
+    const timeoutPromise = new Promise((_, reject) => {
+      sendTimeoutHandle = setTimeout(() => {
+        if (!sendDone) reject(new Error(`SMTP sendMail timed out after ${sendTimeoutMs}ms`));
+      }, sendTimeoutMs);
     });
+    const sendPromise = (async () => {
+      try {
+        return await transporter.sendMail({
+          from: fromAddr,
+          to: cleanEmail,
+          subject: message.subject,
+          text: message.text,
+          html: message.html
+        });
+      } finally {
+        sendDone = true;
+      }
+    })();
+    const sent = await Promise.race([sendPromise, timeoutPromise]);
+    if (sendTimeoutHandle) clearTimeout(sendTimeoutHandle);
+
+    _lastSuccessfulSendAt = Date.now();
 
     const acceptedOk = Array.isArray(sent.accepted) && sent.accepted.includes(cleanEmail);
     if (!acceptedOk) {
@@ -378,6 +478,7 @@ async function sendTransferOtpEmail(recipientEmail, recipientName, otp, transfer
       messageId: sent.messageId || null
     };
   } catch (mailErr) {
+    if (sendTimeoutHandle) clearTimeout(sendTimeoutHandle);
     console.error(
       `[Email Service] Transfer OTP email send FAILURE for ${cleanEmail} (${masked}). Error: ${mailErr && mailErr.message ? mailErr.message : mailErr}. Stack: ${mailErr && mailErr.stack ? mailErr.stack : "N/A"}`
     );
@@ -500,7 +601,10 @@ async function sendAccountCreatedOtpEmail(recipientEmail, recipientName, otpCode
     throw err;
   }
 
-  const transportReady = await verifyMailTransporter(transporter);
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+  const sendTimeoutMs = Number(process.env.SMTP_SEND_TIMEOUT_MS || (isRender ? 25000 : 60000));
+
+  const transportReady = await verifyMailTransporter(transporter, { maxAgeMs: 30 * 60 * 1000 });
   if (!transportReady) {
     const err = new Error("Outbound email service is not responding. SMTP verification failed.");
     console.error(`[Email Service] Account OTP email send FAILED (transport not ready): ${err.message}`);
@@ -510,14 +614,31 @@ async function sendAccountCreatedOtpEmail(recipientEmail, recipientName, otpCode
   const message = buildAccountCreatedMessage(cleanName, otp, credentials);
   const fromAddr = process.env.SMTP_FROM || process.env.MAIL_FROM || `"VanguardDoubleTrust Accounts" <${process.env.SMTP_USER || process.env.MAIL_USER || "accounts@vanguarddoubletrust.com"}>`;
 
+  let sendTimeoutHandle = null;
+  let sendDone = false;
   try {
-    const sent = await transporter.sendMail({
-      from: fromAddr,
-      to: cleanEmail,
-      subject: message.subject,
-      text: message.text,
-      html: message.html
+    const timeoutPromise = new Promise((_, reject) => {
+      sendTimeoutHandle = setTimeout(() => {
+        if (!sendDone) reject(new Error(`SMTP sendMail timed out after ${sendTimeoutMs}ms`));
+      }, sendTimeoutMs);
     });
+    const sendPromise = (async () => {
+      try {
+        return await transporter.sendMail({
+          from: fromAddr,
+          to: cleanEmail,
+          subject: message.subject,
+          text: message.text,
+          html: message.html
+        });
+      } finally {
+        sendDone = true;
+      }
+    })();
+    const sent = await Promise.race([sendPromise, timeoutPromise]);
+    if (sendTimeoutHandle) clearTimeout(sendTimeoutHandle);
+
+    _lastSuccessfulSendAt = Date.now();
 
     const acceptedOk = Array.isArray(sent.accepted) && sent.accepted.includes(cleanEmail);
     console.log(
@@ -534,6 +655,7 @@ async function sendAccountCreatedOtpEmail(recipientEmail, recipientName, otpCode
       messageId: sent.messageId || null
     };
   } catch (mailErr) {
+    if (sendTimeoutHandle) clearTimeout(sendTimeoutHandle);
     console.error(
       `[Email Service] Account OTP email send FAILURE for ${cleanEmail} (${masked}). Error: ${mailErr && mailErr.message ? mailErr.message : mailErr}. Stack: ${mailErr && mailErr.stack ? mailErr.stack : "N/A"}`
     );

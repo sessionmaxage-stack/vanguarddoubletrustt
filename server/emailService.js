@@ -3,6 +3,7 @@ const nodemailer = require("nodemailer");
 let cachedTransporter = null;
 let cachedConfigSig = "";
 let cachedVerifyResult = { ok: false, checkedAt: 0 };
+let lastSuccessfulSendAt = 0;
 
 function maskEmail(email) {
   if (!email || typeof email !== "string") return "";
@@ -47,11 +48,25 @@ function getMailTransporter() {
   cachedConfigSig = sig;
   cachedVerifyResult = { ok: false, checkedAt: 0 };
 
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+  const connectionTimeout = Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || (isRender ? 8000 : 20000));
+  const greetingTimeout = Number(process.env.SMTP_GREETING_TIMEOUT_MS || (isRender ? 10000 : 30000));
+  const socketTimeout = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || (isRender ? 20000 : 60000));
+  const pool = isRender ? false : Boolean(process.env.SMTP_POOL_ENABLED !== "false");
+  const maxConnections = Number(process.env.SMTP_MAX_CONNECTIONS || 1);
+
   if (service && user && pass) {
     try {
       cachedTransporter = nodemailer.createTransport({
         service,
-        auth: { user, pass }
+        auth: { user, pass },
+        pool,
+        maxConnections,
+        connectionTimeout,
+        greetingTimeout,
+        socketTimeout,
+        logger: false,
+        debug: false
       });
       return cachedTransporter;
     } catch (createErr) {
@@ -68,7 +83,16 @@ function getMailTransporter() {
         host,
         port,
         secure,
-        auth: { user, pass }
+        auth: { user, pass },
+        pool,
+        maxConnections,
+        connectionTimeout,
+        greetingTimeout,
+        socketTimeout,
+        tls: { rejectUnauthorized: port !== 587 },
+        requireTLS: port === 587,
+        logger: false,
+        debug: false
       });
       return cachedTransporter;
     } catch (createErr) {
@@ -89,23 +113,54 @@ function getMailTransporter() {
 async function verifyMailTransporter(transporter, opts = {}) {
   if (!transporter || typeof transporter.verify !== "function") return false;
   const force = Boolean(opts.force);
-  const maxAgeMs = Number.isFinite(Number(opts.maxAgeMs)) ? Number(opts.maxAgeMs) : 10 * 60 * 1000;
+  const maxAgeMs = Number.isFinite(Number(opts.maxAgeMs)) ? Number(opts.maxAgeMs) : 30 * 60 * 1000;
   const now = Date.now();
-  if (!force && cachedVerifyResult.ok && cachedVerifyResult.transporter === transporter && (now - cachedVerifyResult.checkedAt) < maxAgeMs) {
-    return true;
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+  const recentSuccessWindowMs = Number(process.env.SMTP_LIVENESS_WINDOW_MS || 60 * 60 * 1000);
+
+  if (!force) {
+    if (cachedVerifyResult.ok && cachedVerifyResult.transporter === transporter && (now - cachedVerifyResult.checkedAt) < maxAgeMs) {
+      return true;
+    }
+    if (lastSuccessfulSendAt > 0 && (now - lastSuccessfulSendAt) < recentSuccessWindowMs) {
+      return true;
+    }
   }
+
+  const verifyTimeoutMs = Number(opts.timeoutMs || (isRender ? Number(process.env.SMTP_VERIFY_TIMEOUT_MS || 7000) : Number(process.env.SMTP_VERIFY_TIMEOUT_MS || 15000)));
+  let timeoutHandle = null;
+  let verifyDone = false;
+
   try {
-    await transporter.verify();
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        if (!verifyDone) {
+          reject(new Error(`SMTP verify() timed out after ${verifyTimeoutMs}ms`));
+        }
+      }, verifyTimeoutMs);
+    });
+    const verifyPromise = Promise.resolve().then(async () => {
+      try {
+        const result = await transporter.verify();
+        return result;
+      } catch (e) {
+        throw e;
+      } finally {
+        verifyDone = true;
+      }
+    });
+    await Promise.race([verifyPromise, timeoutPromise]);
     cachedVerifyResult = { ok: true, transporter, checkedAt: now };
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     return true;
   } catch (verifyErr) {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     cachedVerifyResult = { ok: false, transporter, checkedAt: now };
-    console.error(
-      `[EmailService] SMTP transport verify() failed: ${
-        verifyErr && verifyErr.message ? verifyErr.message : verifyErr
-      }`
+    const msg = verifyErr && verifyErr.message ? verifyErr.message : verifyErr;
+    console.warn(
+      `[EmailService] SMTP transport verify() did not succeed (${msg}). Will attempt direct send anyway.`
     );
-    return false;
+    return isRender ? true : false;
   }
 }
 
@@ -161,7 +216,10 @@ async function sendMail({ to, subject, text, html, from, extraHeaders }) {
     throw err;
   }
 
-  const transportReady = await verifyMailTransporter(transporter, { maxAgeMs: 10 * 60 * 1000 });
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+  const sendTimeoutMs = Number(process.env.SMTP_SEND_TIMEOUT_MS || (isRender ? 25000 : 60000));
+
+  const transportReady = await verifyMailTransporter(transporter, { maxAgeMs: 30 * 60 * 1000 });
   if (!transportReady) {
     const err = new Error(
       "Outbound email service is not responding. SMTP verification failed — please check your SMTP credentials or try again later."
@@ -170,30 +228,50 @@ async function sendMail({ to, subject, text, html, from, extraHeaders }) {
     throw err;
   }
 
+  let sendTimeoutHandle = null;
+  let sendDone = false;
   try {
-    const sent = await transporter.sendMail({
-      from: cleanFrom,
-      to: cleanTo,
-      replyTo: replyTo,
-      subject,
-      text: text || undefined,
-      html: html || undefined,
-      headers: Object.assign(
-        {
-          "X-Mailer": "VanguardDoubleTrust SecureMail v1.0",
-          "X-VT-Service": "vanguarddoubletrust",
-          "X-VT-Audit-Id": `audit-${Date.now()}-${require("crypto").randomBytes(6).toString("hex")}`,
-          "X-VT-OTP-Expires": "900",
-          "X-VT-OTP-Window-Mins": "15",
-          "X-Priority": "1 (Highest)",
-          "X-MSMail-Priority": "High",
-          "Importance": "High",
-          "X-Auto-Response-Suppress": "All,OOF,DR,RN,NRN,AutoReply",
-          "List-Unsubscribe": "<mailto:security@vanguarddoubletrust.com?subject=unsubscribe-security-alerts>"
-        },
-        extraHeaders && typeof extraHeaders === "object" && !Array.isArray(extraHeaders) ? extraHeaders : {}
-      )
+    const sendTimeoutPromise = new Promise((_, reject) => {
+      sendTimeoutHandle = setTimeout(() => {
+        if (!sendDone) {
+          reject(new Error(`SMTP sendMail timed out after ${sendTimeoutMs}ms`));
+        }
+      }, sendTimeoutMs);
     });
+    const sendPromise = (async () => {
+      try {
+        const sent = await transporter.sendMail({
+          from: cleanFrom,
+          to: cleanTo,
+          replyTo: replyTo,
+          subject,
+          text: text || undefined,
+          html: html || undefined,
+          headers: Object.assign(
+            {
+              "X-Mailer": "VanguardDoubleTrust SecureMail v1.0",
+              "X-VT-Service": "vanguarddoubletrust",
+              "X-VT-Audit-Id": `audit-${Date.now()}-${require("crypto").randomBytes(6).toString("hex")}`,
+              "X-VT-OTP-Expires": "900",
+              "X-VT-OTP-Window-Mins": "15",
+              "X-Priority": "1 (Highest)",
+              "X-MSMail-Priority": "High",
+              "Importance": "High",
+              "X-Auto-Response-Suppress": "All,OOF,DR,RN,NRN,AutoReply",
+              "List-Unsubscribe": "<mailto:security@vanguarddoubletrust.com?subject=unsubscribe-security-alerts>"
+            },
+            extraHeaders && typeof extraHeaders === "object" && !Array.isArray(extraHeaders) ? extraHeaders : {}
+          )
+        });
+        return sent;
+      } finally {
+        sendDone = true;
+      }
+    })();
+    const sent = await Promise.race([sendPromise, sendTimeoutPromise]);
+    if (sendTimeoutHandle) clearTimeout(sendTimeoutHandle);
+
+    lastSuccessfulSendAt = Date.now();
 
     const acceptedOk = Array.isArray(sent.accepted) && sent.accepted.includes(cleanTo);
     if (!acceptedOk) {
@@ -222,6 +300,7 @@ async function sendMail({ to, subject, text, html, from, extraHeaders }) {
       envelope: sent.envelope || null
     };
   } catch (mailErr) {
+    if (sendTimeoutHandle) clearTimeout(sendTimeoutHandle);
     console.error(
       `[EmailService] Email send FAILURE for ${cleanTo} (${maskedTo}). Error: ${
         mailErr && mailErr.message ? mailErr.message : mailErr

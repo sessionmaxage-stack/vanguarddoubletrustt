@@ -3708,8 +3708,14 @@ app.use((req, res) => {
 
 const port = Number(process.env.PORT || 3000);
 if (require.main === module) {
-  (async function initSmtpHealthCheck() {
+  app.listen(port, "0.0.0.0", () => {
+    process.stdout.write(`Server running on http://localhost:${port}\n`);
+  });
+
+  (async function initSmtpHealthCheckNonBlocking() {
     try {
+      const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
+      const healthTimeoutMs = Number(process.env.SMTP_STARTUP_TIMEOUT_MS || (isRender ? 6000 : 12000));
       const { getSmtpConfig, getMailTransporter, verifyMailTransporter } = require("./emailService");
       const cfg = getSmtpConfig();
       const hasAnyCred = Boolean(cfg && (cfg.service || cfg.host) && cfg.user && cfg.pass);
@@ -3722,22 +3728,42 @@ if (require.main === module) {
         console.warn("[SMTP] WARNING: OTP email delivery service inactive — nodemailer transport creation failed. Transfer OTP emails will fail.");
         return;
       }
-      const ok = await verifyMailTransporter(transporter);
+      let timeoutHandle = null;
+      let checkDone = false;
+      const timeoutPromise = new Promise((resolve) => {
+        timeoutHandle = setTimeout(() => {
+          if (!checkDone) {
+            console.warn(`[SMTP] SMTP startup health check timed out after ${healthTimeoutMs}ms — will verify lazily on first OTP send.`);
+          }
+          resolve(false);
+        }, healthTimeoutMs);
+      });
+      const checkPromise = (async () => {
+        try {
+          const ok = await verifyMailTransporter(transporter, { force: true, timeoutMs: healthTimeoutMs });
+          return ok;
+        } catch (smtpErr) {
+          console.warn("[SMTP] WARNING: OTP email delivery service health check threw exception:", smtpErr && smtpErr.message ? smtpErr.message : smtpErr);
+          return false;
+        } finally {
+          checkDone = true;
+        }
+      })();
+      const ok = await Promise.race([checkPromise, timeoutPromise]);
+      if (timeoutHandle) clearTimeout(timeoutHandle);
       if (ok) {
         const maskedUser = cfg.user ? String(cfg.user).replace(/^(.{1,3})[^@]*(@.*)$/, (m, a, b) => a + "***" + b) : "";
         const target = cfg.host ? `${cfg.host}:${cfg.port} (${cfg.service || "host"})` : (cfg.service || "SMTP");
         console.log(`[SMTP] OTP email delivery service ACTIVE. Transport: ${target}. Sender: ${maskedUser || 'configured'}`);
+      } else if (!checkDone) {
+        console.warn("[SMTP] SMTP verify exceeded startup window — server is ONLINE; OTP email delivery will be verified lazily on the first transfer request.");
       } else {
-        console.warn("[SMTP] WARNING: SMTP transport verify() returned failure. Transfer OTP email delivery may not work; please check SMTP credentials.");
+        console.warn("[SMTP] WARNING: SMTP transport verify() returned failure at startup. Transfer OTP email delivery will retry with relaxed checks on first send.");
       }
-    } catch (smtpErr) {
-      console.warn("[SMTP] WARNING: OTP email delivery service health check threw exception:", smtpErr && smtpErr.message ? smtpErr.message : smtpErr);
+    } catch (outerErr) {
+      console.warn("[SMTP] Startup SMTP health check outer error (non-fatal; server continues):", outerErr && outerErr.message ? outerErr.message : outerErr);
     }
   })();
-
-  app.listen(port, "0.0.0.0", () => {
-    process.stdout.write(`Server running on http://localhost:${port}\n`);
-  });
 }
 
 module.exports = app;
