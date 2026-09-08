@@ -1,6 +1,12 @@
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const dns = require("dns");
+try {
+  if (dns && typeof dns.setDefaultResultOrder === "function") {
+    dns.setDefaultResultOrder("ipv4first");
+  }
+} catch (_) {}
 
 const express = require("express");
 const helmet = require("helmet");

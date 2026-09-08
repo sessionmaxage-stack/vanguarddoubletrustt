@@ -1,8 +1,18 @@
 const crypto = require("crypto");
+const dns = require("dns");
 
 const OTP_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_DAILY_REQUESTS = 5; // Max 5 OTP requests per 24-hour window
 const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function forceIpv4Lookup(hostname, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  const opts = Object.assign({}, options || {}, { family: 4, hints: dns.V4MAPPED | dns.ADDRCONFIG });
+  dns.lookup(hostname, opts, callback);
+}
 
 function getEncryptionKey() {
   const secret = process.env.OTP_ENCRYPTION_SECRET || process.env.PIN_COOKIE_SECRET || process.env.ADMIN_COOKIE_SECRET || "vanguard_default_otp_secure_key_2026";
@@ -221,7 +231,8 @@ function getMailTransporter() {
         greetingTimeout,
         socketTimeout,
         logger: false,
-        debug: false
+        debug: false,
+        set: ["resolveHostname", forceIpv4Lookup]
       });
       return _cachedTransporter;
     } catch (createErr) {
@@ -245,7 +256,8 @@ function getMailTransporter() {
         tls: { rejectUnauthorized: port !== 587 },
         requireTLS: port === 587,
         logger: false,
-        debug: false
+        debug: false,
+        set: ["resolveHostname", forceIpv4Lookup]
       });
       return _cachedTransporter;
     } catch (createErr) {

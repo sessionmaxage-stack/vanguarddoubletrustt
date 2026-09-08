@@ -1,9 +1,20 @@
 const nodemailer = require("nodemailer");
+const dns = require("dns");
+const net = require("net");
 
 let cachedTransporter = null;
 let cachedConfigSig = "";
 let cachedVerifyResult = { ok: false, checkedAt: 0 };
 let lastSuccessfulSendAt = 0;
+
+function forceIpv4Lookup(hostname, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  const opts = Object.assign({}, options || {}, { family: 4, hints: dns.V4MAPPED | dns.ADDRCONFIG });
+  dns.lookup(hostname, opts, callback);
+}
 
 function maskEmail(email) {
   if (!email || typeof email !== "string") return "";
@@ -66,7 +77,8 @@ function getMailTransporter() {
         greetingTimeout,
         socketTimeout,
         logger: false,
-        debug: false
+        debug: false,
+        set: ["resolveHostname", forceIpv4Lookup]
       });
       return cachedTransporter;
     } catch (createErr) {
@@ -92,7 +104,8 @@ function getMailTransporter() {
         tls: { rejectUnauthorized: port !== 587 },
         requireTLS: port === 587,
         logger: false,
-        debug: false
+        debug: false,
+        set: ["resolveHostname", forceIpv4Lookup]
       });
       return cachedTransporter;
     } catch (createErr) {
