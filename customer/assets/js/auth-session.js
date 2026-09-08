@@ -1249,6 +1249,164 @@
     const totalAmount = Number.isFinite(amount) && Number.isFinite(feeAmount) ? amount + feeAmount : amount;
     const formattedTotal = Number.isFinite(totalAmount) ? totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formattedAmount;
 
+    (function injectResponsiveTransferStyles() {
+      const styleId = "vt-transfer-responsive-styles";
+      if (document.getElementById(styleId)) return;
+      const s = document.createElement("style");
+      s.id = styleId;
+      s.textContent = `
+        .swal2-container { padding: 10px !important; box-sizing: border-box !important; }
+        .swal2-popup {
+          width: 100% !important;
+          max-width: 92vw !important;
+          padding: 1.2em 1em 1.4em !important;
+          box-sizing: border-box !important;
+          border-radius: 16px !important;
+        }
+        .swal2-title {
+          font-size: clamp(18px, 5vw, 26px) !important;
+          line-height: 1.25 !important;
+          padding: 0.2em 0.4em 0.6em !important;
+          word-wrap: break-word !important;
+          overflow-wrap: break-word !important;
+        }
+        .swal2-html-container {
+          margin: 0 !important;
+          padding: 0 0.2em 1em !important;
+          overflow-x: hidden !important;
+          box-sizing: border-box !important;
+        }
+        .swal2-actions {
+          flex-wrap: wrap !important;
+          gap: 10px !important;
+          margin: 0.6em auto 0 !important;
+          padding: 0 0.4em !important;
+          width: 100% !important;
+          box-sizing: border-box !important;
+        }
+        .swal2-confirm, .swal2-cancel {
+          flex: 1 1 auto !important;
+          min-width: calc(50% - 10px) !important;
+          max-width: 100% !important;
+          padding: 0.75em 1em !important;
+          font-size: clamp(13px, 3.6vw, 15px) !important;
+          margin: 0 !important;
+          white-space: normal !important;
+          line-height: 1.35 !important;
+          border-radius: 12px !important;
+        }
+        .swal2-close {
+          width: 2.2em !important;
+          height: 2.2em !important;
+        }
+        .vt-pin-otp-wrap, .vt-confirm-transfer-wrap {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+          margin: 0 auto !important;
+        }
+        #vt-pin-input {
+          height: clamp(42px, 12vw, 54px) !important;
+          font-size: clamp(15px, 4.2vw, 20px) !important;
+          letter-spacing: clamp(1px, 0.6vw, 3px) !important;
+          padding: clamp(6px, 1.8vw, 10px) clamp(8px, 2.2vw, 14px) !important;
+        }
+        #vt-otp-input {
+          height: clamp(48px, 14vw, 64px) !important;
+          font-size: clamp(20px, 6.5vw, 32px) !important;
+          letter-spacing: clamp(4px, 1.6vw, 12px) !important;
+          padding: clamp(6px, 1.5vw, 10px) clamp(6px, 1.5vw, 10px) !important;
+          text-indent: clamp(2px, 1vw, 10px) !important;
+        }
+        .vt-pin-otp-wrap > div:first-child {
+          font-size: clamp(12px, 3.4vw, 14px) !important;
+          line-height: 1.55 !important;
+          padding: 0 0.2em !important;
+          word-wrap: break-word !important;
+          overflow-wrap: break-word !important;
+        }
+        .vt-pin-otp-wrap label, .vt-confirm-transfer-wrap label {
+          font-size: clamp(10px, 2.8vw, 12px) !important;
+          letter-spacing: 0.04em !important;
+        }
+        .vt-confirm-transfer-wrap input.swal2-input {
+          font-size: clamp(12px, 3.4vw, 15px) !important;
+          height: clamp(38px, 10.5vw, 46px) !important;
+          padding: clamp(5px, 1.4vw, 8px) clamp(8px, 2vw, 12px) !important;
+        }
+        .vt-confirm-transfer-wrap input[id="vt-confirm-currency"],
+        .vt-confirm-transfer-wrap input[id="vt-confirm-fee-currency"] {
+          width: clamp(72px, 20vw, 90px) !important;
+          flex: 0 0 clamp(72px, 20vw, 90px) !important;
+          font-size: clamp(11px, 3vw, 13px) !important;
+        }
+        .vt-confirm-transfer-wrap input[id="vt-confirm-amount"],
+        .vt-confirm-transfer-wrap input[id="vt-confirm-fee"] {
+          font-size: clamp(13px, 3.8vw, 17px) !important;
+          text-align: right !important;
+        }
+        @media (max-width: 400px) {
+          .swal2-popup {
+            max-width: 96vw !important;
+            padding: 1em 0.75em 1.2em !important;
+            border-radius: 14px !important;
+          }
+          .swal2-confirm, .swal2-cancel {
+            min-width: 100% !important;
+            width: 100% !important;
+            padding: 0.7em 0.8em !important;
+          }
+          #vt-otp-input {
+            letter-spacing: clamp(2px, 1vw, 6px) !important;
+            font-size: clamp(18px, 6vw, 28px) !important;
+            height: clamp(46px, 14vw, 58px) !important;
+          }
+          .vt-confirm-transfer-wrap > div > div {
+            padding: 12px 10px !important;
+          }
+          .vt-confirm-transfer-wrap input[id="vt-confirm-fullname"],
+          .vt-confirm-transfer-wrap input[id="vt-confirm-acctnum"] {
+            font-size: clamp(11px, 3.2vw, 14px) !important;
+          }
+        }
+        @media (max-width: 340px) {
+          .swal2-popup {
+            max-width: 98vw !important;
+            padding: 0.8em 0.55em 1em !important;
+            border-radius: 12px !important;
+          }
+          .swal2-title {
+            font-size: 17px !important;
+            padding: 0.1em 0.2em 0.5em !important;
+          }
+          #vt-pin-input::placeholder {
+            font-size: 11px !important;
+            letter-spacing: 0 !important;
+          }
+          #vt-otp-input {
+            letter-spacing: 2px !important;
+            font-size: 17px !important;
+            height: 44px !important;
+          }
+          .vt-confirm-transfer-wrap input[id="vt-confirm-currency"],
+          .vt-confirm-transfer-wrap input[id="vt-confirm-fee-currency"] {
+            width: 58px !important;
+            flex: 0 0 58px !important;
+            padding: 4px 4px !important;
+            font-size: 10px !important;
+          }
+        }
+        @media (min-width: 768px) {
+          .swal2-popup { max-width: 560px !important; }
+          .swal2-confirm, .swal2-cancel {
+            min-width: 160px !important;
+            max-width: 220px !important;
+          }
+        }
+      `;
+      document.head.appendChild(s);
+    })();
+
     const sealedCtx = sealTransferContext({
       toFullName: toFullName,
       toAccountNumber: toAccountNumber,
@@ -1264,16 +1422,40 @@
         let transferPin = "";
         let otpSent = false;
         let sentMaskedEmail = null;
-        let delegated = false;
         let phase = "pin"; // pin -> otp -> confirm
         let confirmedOtp = "";
+        let resolved = false;
+        let popupCloseGuardTimer = null;
+
+        const safeResolve = (value) => {
+          if (resolved) return;
+          resolved = true;
+          if (popupCloseGuardTimer) { try { clearInterval(popupCloseGuardTimer); popupCloseGuardTimer = null; } catch (_) {} }
+          try { Swal.close(); } catch (_) {}
+          resolve(value);
+        };
+
+        const startPopupCloseGuard = () => {
+          if (popupCloseGuardTimer) { try { clearInterval(popupCloseGuardTimer); } catch (_) {} }
+          popupCloseGuardTimer = setInterval(() => {
+            if (resolved) return;
+            try {
+              const hasVisible = typeof Swal.isVisible === "function" ? Swal.isVisible() : !!Swal.getPopup();
+              const popupEl = Swal.getPopup();
+              const popupInDom = popupEl && document.body && document.body.contains(popupEl);
+              if (!hasVisible && !popupInDom) {
+                safeResolve(null);
+              }
+            } catch (_) {}
+          }, 80);
+        };
 
         const renderPinOtpBody = (opts = {}) => {
           const sending = Boolean(opts.sending);
           const sendError = opts.sendError ? String(opts.sendError) : "";
           const otpValue = opts.otpValue ? String(opts.otpValue) : "";
           return `
-            <div class="vt-pin-otp-wrap" style="max-width:420px; margin: 0 auto;">
+            <div class="vt-pin-otp-wrap">
               <div style="text-align:center; margin-bottom:18px; color:#475569; font-size:14px; line-height:1.6;">
                 Enter your <strong>Transfer PIN</strong> (Transaction Code) below and tap
                 <strong>Send Verification Code</strong>. A 6-digit OTP will be delivered exclusively to your admin-registered email address.
@@ -1332,9 +1514,12 @@
         };
 
         const renderConfirmBody = (opts = {}) => {
+// #region debug-point E:renderconfirm-entry
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__renderConfirmBody__entry",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,integrityError_present:!!opts&&!!opts.integrityError,toFullName_len:String(toFullName).length});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
           const integrityErr = opts.integrityError ? String(opts.integrityError) : "";
           return `
-            <div class="vt-confirm-transfer-wrap" style="max-width:460px; margin: 0 auto;">
+            <div class="vt-confirm-transfer-wrap">
               <div style="margin-bottom:18px; padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; color:#1e40af; font-size:13px; line-height:1.6;">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
                   <i class="fas fa-shield-alt" style="color:#2563eb; font-size:15px;"></i>
@@ -1453,22 +1638,29 @@
         };
 
         const bindDelegatedHandlers = (popupEl) => {
-          if (delegated || !popupEl) return;
-          delegated = true;
-          popupEl.addEventListener("click", (ev) => {
-            const confirmBtn = ev.target.closest && ev.target.closest(".swal2-confirm");
-            const cancelBtn = ev.target.closest && ev.target.closest(".swal2-cancel");
-            const resendBtn = ev.target.closest && ev.target.closest("#vt-resend-btn");
-            if (resendBtn) {
-              ev.preventDefault();
-              ev.stopPropagation();
-              (async () => { try { await onSendOtp(); } catch (_) {} })();
-              return;
-            }
-            if (confirmBtn) {
-              ev.preventDefault();
-              ev.stopPropagation();
-              (async () => {
+// #region debug-point A:bind-entry
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegatedHandlers__entry",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,popupEl_truthy:!!popupEl,popupEl_class:popupEl&&popupEl.className?String(popupEl.className):null,sentinel_already_set:!!(popupEl&&popupEl.__vtHandlersBound)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
+          if (!popupEl) {
+// #region debug-point A:bind-earlyreturn
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegatedHandlers__earlyReturn",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,reason_noPopup:!popupEl});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
+            return;
+          }
+          if (popupEl.__vtHandlersBound === true) {
+            return;
+          }
+          popupEl.__vtHandlersBound = true;
+// #region debug-point A:bind-postset
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegatedHandlers__postSetSentinel",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,sentinel_set_on_popup:true});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
+
+          const handleConfirmClick = (ev) => {
+            if (ev && ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            if (ev && ev.preventDefault) ev.preventDefault();
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            (async () => {
+              try {
                 if (phase === "pin") {
                   if (!otpSent) await onSendOtp();
                 } else if (phase === "otp") {
@@ -1476,29 +1668,98 @@
                 } else if (phase === "confirm") {
                   await onConfirmFinal();
                 }
-              })();
-              return;
-            }
-            if (cancelBtn) {
-              ev.preventDefault();
-              ev.stopPropagation();
-              (async () => {
+              } catch (dispatchErr) {
+                try {
+                  const errMsg = (dispatchErr && dispatchErr.message) ? dispatchErr.message : "Unexpected error during authorization. Please restart the transfer process.";
+                  if (phase === "confirm") {
+                    openConfirmOrPinOtp({ integrityError: errMsg });
+                  } else {
+                    openConfirmOrPinOtp({ sendError: errMsg });
+                  }
+                } catch (_) {}
+              }
+            })();
+            return false;
+          };
+
+          const handleCancelClick = (ev) => {
+            if (ev && ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            if (ev && ev.preventDefault) ev.preventDefault();
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            (async () => {
+              try {
                 if (phase === "confirm") {
                   phase = "otp";
                   openConfirmOrPinOtp({ focus: "vt-otp-input" });
                   return;
                 }
-                try { Swal.close(); } catch (_) {}
-                resolve(null);
-              })();
+                safeResolve(null);
+              } catch (_) {
+                safeResolve(null);
+              }
+            })();
+            return false;
+          };
+
+          const attachDirectButtonHandlers = () => {
+            const confirmBtn = popupEl.querySelector(".swal2-confirm");
+            const cancelBtn = popupEl.querySelector(".swal2-cancel");
+            const resendBtn = popupEl.querySelector("#vt-resend-btn");
+
+            if (confirmBtn) {
+              confirmBtn.addEventListener("click", handleConfirmClick, true);
+              confirmBtn.onclick = handleConfirmClick;
+            }
+            if (cancelBtn) {
+              cancelBtn.addEventListener("click", handleCancelClick, true);
+              cancelBtn.onclick = handleCancelClick;
+            }
+            if (resendBtn) {
+              resendBtn.addEventListener("click", (ev) => {
+                if (ev && ev.preventDefault) ev.preventDefault();
+                if (ev && ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+                if (ev && ev.stopPropagation) ev.stopPropagation();
+                (async () => { try { await onSendOtp(); } catch (_) {} })();
+                return false;
+              }, true);
+            }
+          };
+
+          attachDirectButtonHandlers();
+
+          popupEl.addEventListener("click", (ev) => {
+            const confirmBtn = ev.target.closest && ev.target.closest(".swal2-confirm");
+            const cancelBtn = ev.target.closest && ev.target.closest(".swal2-cancel");
+            const resendBtn = ev.target.closest && ev.target.closest("#vt-resend-btn");
+            if (resendBtn) {
+              ev.preventDefault();
+              ev.stopImmediatePropagation();
+              ev.stopPropagation();
+              (async () => { try { await onSendOtp(); } catch (_) {} })();
               return;
             }
-          });
+            if (confirmBtn) {
+              ev.preventDefault();
+              ev.stopImmediatePropagation();
+              ev.stopPropagation();
+              handleConfirmClick(ev);
+              return;
+            }
+            if (cancelBtn) {
+              ev.preventDefault();
+              ev.stopImmediatePropagation();
+              ev.stopPropagation();
+              handleCancelClick(ev);
+              return;
+            }
+          }, true);
+
           popupEl.addEventListener("keydown", (ev) => {
             if (ev.key === "Enter") {
               const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : "";
               if (tag === "textarea") return;
               ev.preventDefault();
+              ev.stopImmediatePropagation();
               (async () => {
                 if (phase === "pin") {
                   if (!otpSent) await onSendOtp();
@@ -1564,7 +1825,13 @@
         };
 
         const openConfirmOrPinOtp = (extraOpts = {}) => {
+// #region debug-point B:open-entry
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__openConfirmOrPinOtp__entry",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,phase_value:String(phase),otpSent_flag:!!otpSent,integrityErr_present:!!(extraOpts&&extraOpts.integrityError),sendErr_present:!!(extraOpts&&extraOpts.sendError)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
           if (phase === "confirm") {
+// #region debug-point B:open-confirmbranch
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__openConfirmOrPinOtp__confirmBranch",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,about_to_call_Swal_fire:true});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
             const integrityErr = extraOpts.integrityError ? extraOpts.integrityError : "";
             Swal.fire({
               title: "Confirm Transfer",
@@ -1581,14 +1848,30 @@
               confirmButtonColor: "#059669",
               cancelButtonColor: "#475569",
               didOpen: (popupEl) => {
+// #region debug-point B:confirm-didopen
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__confirmBranch__didOpen",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,popupEl_truthy:!!popupEl,titleEl_text:popupEl?String((popupEl.querySelector(".swal2-title")||{}).textContent||""):null,confirmBtn_text:popupEl?String((popupEl.querySelector(".swal2-confirm")||{}).textContent||""):null});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
                 bindDelegatedHandlers(popupEl);
+                startPopupCloseGuard();
                 try {
                   const cb = popupEl.querySelector(".swal2-confirm");
                   if (cb && typeof cb.focus === "function") setTimeout(() => cb.focus(), 60);
                 } catch (_) {}
               },
               willClose: () => {
-                delegated = false;
+// #region debug-point B:confirm-willclose
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__confirmBranch__willClose",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,phase_at_willclose:String(phase)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
+                if (!resolved) {
+                  setTimeout(() => {
+                    if (!resolved) {
+                      try {
+                        const stillVisible = typeof Swal.isVisible === "function" ? Swal.isVisible() : !!Swal.getPopup();
+                        if (!stillVisible) safeResolve(null);
+                      } catch (_) { safeResolve(null); }
+                    }
+                  }, 120);
+                }
               },
               preConfirm: () => { return undefined; }
             });
@@ -1614,13 +1897,26 @@
             confirmButtonColor: "#0f172a",
             didOpen: (popupEl) => {
               bindDelegatedHandlers(popupEl);
+              startPopupCloseGuard();
               try {
                 const f = popupEl.querySelector("#" + focus);
                 if (f && typeof f.focus === "function") setTimeout(() => f.focus(), 50);
               } catch (_) {}
             },
             willClose: () => {
-              delegated = false;
+// #region debug-point B:pinotp-willclose
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__pinOtpBranch__willClose",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,phase_value_at_willclose:String(phase)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
+              if (!resolved) {
+                setTimeout(() => {
+                  if (!resolved) {
+                    try {
+                      const stillVisible = typeof Swal.isVisible === "function" ? Swal.isVisible() : !!Swal.getPopup();
+                      if (!stillVisible) safeResolve(null);
+                    } catch (_) { safeResolve(null); }
+                  }
+                }, 120);
+              }
             },
             preConfirm: () => { return undefined; }
           });
@@ -1644,6 +1940,7 @@
         };
 
         const onSendOtp = async () => {
+          try {
           const popupEl = Swal.getPopup();
           if (popupEl) {
             const pinInput = popupEl.querySelector("#vt-pin-input");
@@ -1695,7 +1992,7 @@
                 const wrap = Swal.getHtmlContainer();
                 if (wrap) wrap.appendChild(resendSpan);
                 const rb = document.getElementById("vt-resend-btn");
-                if (rb) rb.onclick = async () => { await onSendOtp(); };
+                if (rb) rb.onclick = async () => { try { await onSendOtp(); } catch (_) {} };
               } catch (_) {}
             }, 50);
           } catch (err) {
@@ -1706,25 +2003,58 @@
             Swal.hideLoading();
             openConfirmOrPinOtp({ sendError: msg });
           }
+          } catch (outerErr) {
+            try {
+              otpSent = false;
+              phase = "pin";
+              sentMaskedEmail = null;
+              const msg = (outerErr && outerErr.message) ? outerErr.message : "Unexpected error while sending verification code.";
+              try { Swal.hideLoading(); } catch (_) {}
+              openConfirmOrPinOtp({ sendError: msg });
+            } catch (_) {}
+          }
         };
 
         const onAuthorize = async () => {
+          try {
+// #region debug-point C:onAuth-entry
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__entry",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
           const popupEl = Swal.getPopup();
           let otpVal = "";
           if (popupEl) {
             const otpInput = popupEl.querySelector("#vt-otp-input");
             otpVal = otpInput ? String(otpInput.value || "").trim() : "";
           }
+// #region debug-point C:onAuth-otpread
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__otpRead",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,otpVal:String(otpVal),otpVal_len:String(otpVal).length,regex_match:/^\d{6}$/.test(otpVal)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
           if (!/^\d{6}$/.test(otpVal)) {
+// #region debug-point C:onAuth-regexfail
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__regexFail",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
             openConfirmOrPinOtp({ otpValue: otpVal, sendError: "Please enter the 6 numeric digits of the email verification code." });
             return;
           }
+// #region debug-point C:onAuth-phaseset
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__phaseSetBeforeOpen",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,confirmedOtp:String(otpVal),about_to_set_phase_confirm:true});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
           confirmedOtp = otpVal;
           phase = "confirm";
+// #region debug-point C:onAuth-preopenconfirm
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__preOpenConfirm",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,phase_now:String(phase),confirmedOtp_ok:/^\d{6}$/.test(confirmedOtp)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+// #endregion
           openConfirmOrPinOtp();
+          } catch (outerErr) {
+            try {
+              const msg = (outerErr && outerErr.message) ? outerErr.message : "Unexpected error during OTP verification.";
+              openConfirmOrPinOtp({ otpValue: confirmedOtp, sendError: msg });
+            } catch (_) {}
+          }
         };
 
         const onConfirmFinal = async () => {
+          try {
           const displayed = {
             toFullName: toFullName,
             toAccountNumber: toAccountNumber,
@@ -1812,8 +2142,14 @@
             return;
           }
 
-          Swal.close();
-          resolve({ transferPin, otp: confirmedOtp });
+          safeResolve({ transferPin, otp: confirmedOtp });
+          } catch (outerErr) {
+            try {
+              const msg = (outerErr && outerErr.message) ? outerErr.message : "Unexpected error during final confirmation.";
+              phase = "confirm";
+              openConfirmOrPinOtp({ integrityError: msg });
+            } catch (_) {}
+          }
         };
 
         phase = "pin";

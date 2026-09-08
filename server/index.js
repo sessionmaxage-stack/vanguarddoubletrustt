@@ -1703,6 +1703,7 @@ app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfile
 });
 
 app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (req, res) => {
+  try {
   const b = req.body || {};
   const uid = req.user.uid;
   const toAccountNumber = String(b.toAccountNumber || b.to || "").trim();
@@ -1886,30 +1887,43 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
       availableBalance: newRecipientAvailableBalance
     }
   }, { merge: true });
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (batchErr) {
+    res.status(500).json({
+      error: "Transfer was not processed — no funds deducted. Please try again or contact support if the issue persists."
+    });
+    return;
+  }
 
-  const debitTx = await writeTransaction({
-    uid: String(uid),
-    type: "TRANSFER_OUT",
-    amount: Number(Number(amount).toFixed(2)),
-    currency,
-    status: "COMPLETED",
-    note: memo || `Transfer to ${recipientName || recipientAccountNumber}`,
-    from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
-    to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
-    reference
-  }).catch(() => null);
-  const creditTx = await writeTransaction({
-    uid: recipientUid,
-    type: "TRANSFER_IN",
-    amount: Number(Number(amount).toFixed(2)),
-    currency,
-    status: "COMPLETED",
-    note: memo || `Transfer from ${senderName || senderAccountNumber}`,
-    from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
-    to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
-    reference
-  }).catch(() => null);
+  let debitTx = null;
+  try {
+    debitTx = await writeTransaction({
+      uid: String(uid),
+      type: "TRANSFER_OUT",
+      amount: Number(Number(amount).toFixed(2)),
+      currency,
+      status: "COMPLETED",
+      note: memo || `Transfer to ${recipientName || recipientAccountNumber}`,
+      from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
+      to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
+      reference
+    });
+  } catch (_txErr) { debitTx = null; }
+  let creditTx = null;
+  try {
+    creditTx = await writeTransaction({
+      uid: recipientUid,
+      type: "TRANSFER_IN",
+      amount: Number(Number(amount).toFixed(2)),
+      currency,
+      status: "COMPLETED",
+      note: memo || `Transfer from ${senderName || senderAccountNumber}`,
+      from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
+      to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
+      reference
+    });
+  } catch (_txErr) { creditTx = null; }
   res.status(200).json({
     ok: true,
     reference,
@@ -1926,9 +1940,14 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
       email: recipientDoc?.email || ""
     }
   });
+  } catch (e) {
+    const normalized = normalizeFirebaseAdminError(e, "Unable to complete the transfer.");
+    res.status(normalized.status).json({ error: normalized.error });
+  }
 });
 
 app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic, async (req, res) => {
+  try {
   const b = req.body || {};
   const uid = req.user.uid;
   const toAccountNumber = String(b.toAccountNumber || b.to || "").trim();
@@ -2103,30 +2122,43 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
       availableBalance: newRecipientAvailableBalance
     }
   }, { merge: true });
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (batchErr) {
+    res.status(500).json({
+      error: "Transfer was not processed — no funds deducted. Please try again or contact support if the issue persists."
+    });
+    return;
+  }
 
-  const debitTx = await writeTransaction({
-    uid: String(uid),
-    type: "TRANSFER_OUT",
-    amount: Number(Number(amount).toFixed(2)),
-    currency,
-    status: "COMPLETED",
-    note: memo || `Transfer to ${recipientName || recipientAccountNumber}`,
-    from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
-    to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
-    reference
-  }).catch(() => null);
-  const creditTx = await writeTransaction({
-    uid: recipientUid,
-    type: "TRANSFER_IN",
-    amount: Number(Number(amount).toFixed(2)),
-    currency,
-    status: "COMPLETED",
-    note: memo || `Transfer from ${senderName || senderAccountNumber}`,
-    from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
-    to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
-    reference
-  }).catch(() => null);
+  let debitTx = null;
+  try {
+    debitTx = await writeTransaction({
+      uid: String(uid),
+      type: "TRANSFER_OUT",
+      amount: Number(Number(amount).toFixed(2)),
+      currency,
+      status: "COMPLETED",
+      note: memo || `Transfer to ${recipientName || recipientAccountNumber}`,
+      from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
+      to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
+      reference
+    });
+  } catch (_txErr) { debitTx = null; }
+  let creditTx = null;
+  try {
+    creditTx = await writeTransaction({
+      uid: recipientUid,
+      type: "TRANSFER_IN",
+      amount: Number(Number(amount).toFixed(2)),
+      currency,
+      status: "COMPLETED",
+      note: memo || `Transfer from ${senderName || senderAccountNumber}`,
+      from: { uid: String(uid), accountNumber: senderAccountNumber, name: senderName, email: senderDoc?.email || "" },
+      to: { uid: recipientUid, accountNumber: recipientAccountNumber, name: recipientName, email: recipientDoc?.email || "" },
+      reference
+    });
+  } catch (_txErr) { creditTx = null; }
   res.status(200).json({
     ok: true,
     reference,
@@ -2143,6 +2175,10 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
       email: recipientDoc?.email || ""
     }
   });
+  } catch (e) {
+    const normalized = normalizeFirebaseAdminError(e, "Unable to complete the transfer.");
+    res.status(normalized.status).json({ error: normalized.error });
+  }
 });
 
 app.post("/api/admin/login", async (req, res) => {
