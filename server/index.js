@@ -3721,7 +3721,6 @@ if (require.main === module) {
   (async function initSmtpHealthCheckNonBlocking() {
     try {
       const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
-      const healthTimeoutMs = Number(process.env.SMTP_STARTUP_TIMEOUT_MS || (isRender ? 6000 : 12000));
       const { getSmtpConfig, getMailTransporter, verifyMailTransporter } = require("./emailService");
       const cfg = getSmtpConfig();
       const hasAnyCred = Boolean(cfg && (cfg.service || cfg.host) && cfg.user && cfg.pass);
@@ -3734,6 +3733,15 @@ if (require.main === module) {
         console.warn("[SMTP] WARNING: OTP email delivery service inactive — nodemailer transport creation failed. Transfer OTP emails will fail.");
         return;
       }
+
+      if (isRender || String(process.env.SMTP_SKIP_VERIFY || "").toLowerCase() === "true") {
+        const maskedUser = cfg.user ? String(cfg.user).replace(/^(.{1,3})[^@]*(@.*)$/, (m, a, b) => a + "***" + b) : "";
+        const target = cfg.host ? `${cfg.host}:${cfg.port} (${cfg.service || "host"})` : (cfg.service || "SMTP");
+        console.log(`[SMTP] OTP email delivery service READY (production). SMTP transport verify() skipped; health confirmed on first OTP sendMail(). Transport: ${target}. Sender: ${maskedUser || 'configured'}`);
+        return;
+      }
+
+      const healthTimeoutMs = Number(process.env.SMTP_STARTUP_TIMEOUT_MS || 12000);
       let timeoutHandle = null;
       let checkDone = false;
       const timeoutPromise = new Promise((resolve) => {
