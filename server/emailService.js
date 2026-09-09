@@ -130,6 +130,7 @@ async function verifyMailTransporter(transporter, opts = {}) {
   const now = Date.now();
   const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || (process.env.NODE_ENV === "production"));
   const recentSuccessWindowMs = Number(process.env.SMTP_LIVENESS_WINDOW_MS || 60 * 60 * 1000);
+  const skipVerify = !force && (isRender || String(process.env.SMTP_SKIP_VERIFY || "").toLowerCase() === "true");
 
   if (!force) {
     if (cachedVerifyResult.ok && cachedVerifyResult.transporter === transporter && (now - cachedVerifyResult.checkedAt) < maxAgeMs) {
@@ -138,6 +139,14 @@ async function verifyMailTransporter(transporter, opts = {}) {
     if (lastSuccessfulSendAt > 0 && (now - lastSuccessfulSendAt) < recentSuccessWindowMs) {
       return true;
     }
+  }
+
+  if (skipVerify) {
+    if (!cachedVerifyResult.checkedAt) {
+      console.warn(`[EmailService] SMTP transport verify() SKIPPED (production/Render). Relying on direct sendMail() health.`);
+    }
+    cachedVerifyResult = { ok: true, transporter, checkedAt: now };
+    return true;
   }
 
   const verifyTimeoutMs = Number(opts.timeoutMs || (isRender ? Number(process.env.SMTP_VERIFY_TIMEOUT_MS || 7000) : Number(process.env.SMTP_VERIFY_TIMEOUT_MS || 15000)));
