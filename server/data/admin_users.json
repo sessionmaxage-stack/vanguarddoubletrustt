@@ -335,5 +335,91 @@
     "photoURL": "/uploads/profiles/p_1788831936670_c18fc15de0b90eb1.png",
     "photo": "/uploads/profiles/p_1788831936670_c18fc15de0b90eb1.png",
     "avatar": "/uploads/profiles/p_1788831936670_c18fc15de0b90eb1.png"
+  },
+  "d1D9ELs0ZFWs2Nj0FsgJMq4tayD3": {
+    "email": "cdpsswrdng@gmail.com",
+    "createdAt": "2026-09-09T13:37:11.600Z",
+    "updatedAt": "2026-09-09T13:37:11.600Z",
+    "adminGenerated": true,
+    "createdBy": "ffclimmigration@gmail.com",
+    "_adminCreated": true,
+    "profile": {
+      "email": "cdpsswrdng@gmail.com",
+      "firstname": "just",
+      "lastname": "out",
+      "phone": "+2347084197619",
+      "country": "NG",
+      "preferredLanguage": "ar",
+      "dateOfBirth": "2000-09-23",
+      "gender": "other",
+      "nationality": "china",
+      "occupation": "software",
+      "address": "651 N Broad Street",
+      "city": "middletown",
+      "state": "Delaware",
+      "zipCode": "19709",
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-09-09T13:37:11.600Z",
+      "kycDoneAt": "2026-09-09T13:37:11.600Z",
+      "KYCDoneAt": "2026-09-09T13:37:11.600Z",
+      "profilePic": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+      "photoURL": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+      "photo": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+      "avatar": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg"
+    },
+    "security": {
+      "accountPinHash": "67c6d263f2a810c4dc433049b63d48c7f32a3aca50716ce0858931e2fed9c500",
+      "transferPinHash": "a10ca210c6f1b6aadfbba53800847653e2c021b2fc353b26e095723717e75ccb",
+      "twoFactorEnabled": true,
+      "kycCompleted": true,
+      "kycDone": true,
+      "KYCDone": true,
+      "kycCompletedAt": "2026-09-09T13:37:11.600Z",
+      "kycDoneAt": "2026-09-09T13:37:11.600Z",
+      "KYCDoneAt": "2026-09-09T13:37:11.600Z",
+      "profilePic": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+      "photoURL": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+      "photo": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+      "avatar": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+      "accountCreatedOtp": {
+        "encryptedData": "d3b4856bcd2c",
+        "iv": "fd0249e4b7a92efc3af9966e",
+        "authTag": "6d9b929326d83746591216ce4bee78da",
+        "createdAt": 1788961034865,
+        "expiresAt": 1788961934865,
+        "verified": false,
+        "transferContext": {
+          "amount": null,
+          "currency": "USD",
+          "toAccountNumber": null,
+          "toEmail": null,
+          "memo": null
+        }
+      },
+      "accountCreatedOtpSentAt": "2026-09-09T13:37:15.390Z"
+    },
+    "account": {
+      "accountNumber": "2253456134",
+      "status": "ACTIVE",
+      "branchCode": "RBSUS001",
+      "openingDate": "2026-09-09T13:37:11.600Z",
+      "lastLogin": "2026-09-09T13:37:11.600Z",
+      "currency": "USD",
+      "balance": 20000000
+    },
+    "onboarding": {
+      "required": false
+    },
+    "preferredLanguage": "ar",
+    "kycCompleted": true,
+    "country": "NG",
+    "firstname": "just",
+    "lastname": "out",
+    "profilePic": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+    "photoURL": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+    "photo": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg",
+    "avatar": "/uploads/profiles/p_1788960729672_9285895633f98e14.jpg"
   }
 }
