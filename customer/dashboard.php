@@ -2932,6 +2932,36 @@
 
       function submitTransfer(ctx) {
         var submitBtn = document.getElementById("transferSubmitBtn");
+        var __dashIsAdminSender = null;
+        var __dashHoldMs = 120000;
+        var __dashLocalSleep = function(ms) {
+          return new Promise(function(r) {
+            setTimeout(r, ms);
+          });
+        };
+        var __dashFmtMmss = function(ms) {
+          var total = Math.max(0, Math.ceil(Number(ms) / 1000));
+          var m = Math.floor(total / 60);
+          var s = total % 60;
+          return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        };
+        var __dashEnsureAdminFlag = function() {
+          if (__dashIsAdminSender === true || __dashIsAdminSender === false) return Promise.resolve(__dashIsAdminSender);
+          return fetch("/api/me", {
+              credentials: "include"
+            })
+            .then(function(r) {
+              return r.ok ? r.json() : Promise.reject();
+            })
+            .then(function(d) {
+              __dashIsAdminSender = Boolean(d && d.isAdminCreatedAccount);
+              return __dashIsAdminSender;
+            })
+            .catch(function() {
+              __dashIsAdminSender = false;
+              return false;
+            });
+        };
         if (submitBtn) submitBtn.disabled = true;
         var typeSel = document.getElementById("transferLookupType");
         var valInput = document.getElementById("transferLookupValue");
@@ -2964,56 +2994,124 @@
         if (type === "accountNumber") requestBody.toAccountNumber = value;
         else requestBody.toEmail = value;
 
-        function doExecuteTransfer(_ignoredOtp) {
+        async function doExecuteTransferAsync() {
           var bodyObj = Object.assign({}, requestBody);
           var originalText = submitBtn ? submitBtn.textContent : "Send";
           if (submitBtn) submitBtn.textContent = "Sending…";
-          fetchJson("/api/customer/transfer", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify(bodyObj)
-            })
-            .then(function(data) {
-              if (data && data.ok) {
-                setTransferMsg("success", "Bank Transfer sent successfully. Reference " + (data.reference || "--"));
-                toast("Bank Transfer completed successfully!", "success");
-                var bal = document.getElementById("balanceAmount");
-                if (bal && data && Number.isFinite(Number(data.newBalance))) {
-                  var c = (ctx && ctx.currency) ? ctx.currency : "USD";
-                  bal.textContent = fmtCurrency(Number(data.newBalance), c);
-                }
-                if (codeInput) codeInput.value = "";
-                if (amtInput) amtInput.value = "";
-                if (memoInput) memoInput.value = "";
-                if (valInput) valInput.value = "";
-                transferState.recipient = null;
-                updateRecipientPreview();
-              } else {
-                setTransferMsg("error", (data && data.error) ? String(data.error) : "Transfer failed.");
-                toast((data && data.error) ? String(data.error) : "Transfer failed.", "error");
+          var fetchPromise = fetchJson("/api/customer/transfer", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(bodyObj)
+          });
+          try {
+            var results = await Promise.all([
+              fetchPromise,
+              __dashIsAdminSender ? __dashLocalSleep(__dashHoldMs) : Promise.resolve()
+            ]);
+            var data = results[0];
+            if (data && data.ok) {
+              setTransferMsg("success", "Bank Transfer sent successfully. Reference " + (data.reference || "--"));
+              toast("Bank Transfer completed successfully!", "success");
+              var bal = document.getElementById("balanceAmount");
+              if (bal && data && Number.isFinite(Number(data.newBalance))) {
+                var c = (ctx && ctx.currency) ? ctx.currency : "USD";
+                bal.textContent = fmtCurrency(Number(data.newBalance), c);
               }
-            })
-            .catch(function(err) {
-              setTransferMsg("error", err && err.message ? String(err.message) : "Unable to complete transfer.");
-              toast(err && err.message ? String(err.message) : "Unable to complete transfer.", "error");
-            })
-            .finally(function() {
-              if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
-              }
-            });
+              if (codeInput) codeInput.value = "";
+              if (amtInput) amtInput.value = "";
+              if (memoInput) memoInput.value = "";
+              if (valInput) valInput.value = "";
+              transferState.recipient = null;
+              updateRecipientPreview();
+            } else {
+              setTransferMsg("error", (data && data.error) ? String(data.error) : "Transfer failed.");
+              toast((data && data.error) ? String(data.error) : "Transfer failed.", "error");
+            }
+          } catch (err) {
+            setTransferMsg("error", err && err.message ? String(err.message) : "Unable to complete transfer.");
+            toast(err && err.message ? String(err.message) : "Unable to complete transfer.", "error");
+          } finally {
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = originalText;
+            }
+          }
         }
 
         requestBody.transferPin = code;
         requestBody.transferCode = code;
 
-        toast((window.VT && window.VT.I18N && typeof window.VT.I18N.t === "function") ?
-          window.VT.I18N.t("Transfer PIN verified. Processing transfer...") :
-          "Transfer PIN verified. Processing transfer...", "info");
-        doExecuteTransfer("");
+        (async function() {
+          await __dashEnsureAdminFlag();
+          var intervalId = null;
+          var processingSwalShown = false;
+          try {
+            if (window.Swal) {
+              processingSwalShown = true;
+              var bannerHtml = "";
+              if (__dashIsAdminSender) {
+                bannerHtml = '<div style="color:#f59e0b;font-weight:700;font-size:14px;margin-top:10px;line-height:1.5;">⚠️ Admin account security hold — processing in <span id="dashHoldCountdown" style="font-variant-numeric:tabular-nums;">' + __dashFmtMmss(__dashHoldMs) + '</span>…<br/><span style="font-weight:500;color:#94a3b8;font-size:12px;">This hold is applied exclusively to administrator-generated accounts and cannot be skipped.</span></div>';
+              }
+              var willDoCountdown = __dashIsAdminSender;
+              window.Swal.fire({
+                title: "Processing Transfer",
+                html: bannerHtml,
+                text: willDoCountdown ? "" : "Verifying Transfer PIN and processing transfer...",
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: function() {
+                  window.Swal.showLoading();
+                  if (willDoCountdown) {
+                    var remaining = __dashHoldMs;
+                    var tick = function() {
+                      var el = document.getElementById("dashHoldCountdown");
+                      if (!el) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                        return;
+                      }
+                      el.textContent = __dashFmtMmss(remaining);
+                      remaining = Math.max(0, remaining - 250);
+                      if (remaining <= 0 && intervalId) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                      }
+                    };
+                    tick();
+                    intervalId = setInterval(tick, 250);
+                  }
+                },
+                willClose: function() {
+                  if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                  }
+                }
+              });
+            }
+            var infoMsg = "Transfer PIN verified. Processing transfer...";
+            if (window.VT && window.VT.I18N && typeof window.VT.I18N.t === "function") {
+              try {
+                infoMsg = window.VT.I18N.t("Transfer PIN verified. Processing transfer...");
+              } catch (_) {}
+            }
+            toast(infoMsg, "info");
+            await doExecuteTransferAsync();
+          } finally {
+            if (processingSwalShown && window.Swal) {
+              try {
+                window.Swal.close();
+              } catch (_) {}
+            }
+            if (intervalId) {
+              clearInterval(intervalId);
+              intervalId = null;
+            }
+          }
+        })();
       }
 
       function initTransferModal(ctx) {

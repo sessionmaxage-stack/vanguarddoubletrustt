@@ -784,7 +784,8 @@ app.get("/api/me", requireAuth, async (req, res) => {
     createdAt: freshUser.createdAt || null,
     updatedAt: freshUser.updatedAt || null,
     pinVerified: isPinVerified(req),
-    onboarding: onboardingInfo
+    onboarding: onboardingInfo,
+    isAdminCreatedAccount: isAdminGeneratedAccount(freshUser)
   });
 });
 
@@ -830,6 +831,8 @@ function cleanString(v, maxLen) {
   if (maxLen && s.length > maxLen) return s.slice(0, maxLen);
   return s;
 }
+
+function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 function buildAllowedLanguageSet() {
   return new Set([
@@ -1549,6 +1552,10 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const recipientName = `${String(recipientDoc?.profile?.firstname || "").trim()} ${String(recipientDoc?.profile?.lastname || "").trim()}`.trim() || String(recipientDoc?.email || "");
   const senderAccountNumber = senderAccount?.accountNumber || "";
   const recipientAccountNumber = recipientAccount?.accountNumber || "";
+  if (isAdminGeneratedAccount(senderDoc)) {
+    console.log(`[ADMIN-HOLD] Holding transfer for admin-created sender ${String(uid)} for 120s (${new Date().toISOString()})`);
+    await sleep(120000);
+  }
   const batch = db.batch();
   const recRef = db.collection("users").doc(String(recipientUid));
 
@@ -1749,6 +1756,10 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
   const recipientName = `${String(recipientDoc?.profile?.firstname || "").trim()} ${String(recipientDoc?.profile?.lastname || "").trim()}`.trim() || String(recipientDoc?.email || "");
   const senderAccountNumber = senderAccount?.accountNumber || "";
   const recipientAccountNumber = recipientAccount?.accountNumber || "";
+  if (isAdminGeneratedAccount(senderDoc)) {
+    console.log(`[ADMIN-HOLD] Holding transfer for admin-created sender ${String(uid)} for 120s (${new Date().toISOString()})`);
+    await sleep(120000);
+  }
   const batch = db.batch();
   const recRef = db.collection("users").doc(String(recipientUid));
 
@@ -1887,7 +1898,10 @@ app.get("/api/admin/users", requireAdminAuth, async (req, res) => {
           status: account.status || "ACTIVE",
           currency: account.currency || "USD",
           updatedAt: data.updatedAt || null,
-          createdAt: data.createdAt || null
+          createdAt: data.createdAt || null,
+          adminGenerated: (data.adminGenerated === true),
+          createdBy: (typeof data.createdBy === "string" ? data.createdBy : null),
+          _adminCreated: (data._adminCreated === true)
         };
       });
   } catch (fsErr) {
@@ -2715,7 +2729,11 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       userData = localUsers[uid] || null;
     }
 
-    if (isAdminGeneratedAccount(userData) || isAdminGeneratedAccount(uid)) {
+    const isOldAccount = userData && (
+      (typeof userData.createdAt === "string" && Date.now() - Date.parse(userData.createdAt) >= 30*86400000) ||
+      new Set(["CLOSED","EXPIRED","SUSPENDED","BLOCKED"]).has(String(userData?.account?.status || "").toUpperCase())
+    );
+    if ((isAdminGeneratedAccount(userData) || isAdminGeneratedAccount(uid)) && !isOldAccount) {
       res.status(403).json({
         error: "Admin-generated accounts are permanently locked and cannot be deleted. All original account details are preserved indefinitely for accounts created through the admin dashboard. No deletion, purge, or removal actions are permitted."
       });
@@ -2734,7 +2752,12 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       // Check if user exists only in local store
       const localUsers = readLocalUsers();
       if (localUsers[uid]) {
-        if (isAdminGeneratedAccount(localUsers[uid]) || isAdminGeneratedAccount(uid)) {
+        const localUserData = localUsers[uid];
+        const isOldLocalAccount = localUserData && (
+          (typeof localUserData.createdAt === "string" && Date.now() - Date.parse(localUserData.createdAt) >= 30*86400000) ||
+          new Set(["CLOSED","EXPIRED","SUSPENDED","BLOCKED"]).has(String(localUserData?.account?.status || "").toUpperCase())
+        );
+        if ((isAdminGeneratedAccount(localUsers[uid]) || isAdminGeneratedAccount(uid)) && !isOldLocalAccount) {
           res.status(403).json({
             error: "Admin-generated accounts are permanently locked and cannot be deleted. All original account details are preserved indefinitely."
           });

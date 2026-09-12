@@ -2019,6 +2019,26 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__pinOtpBranch_
         transferPin = String(opts && opts.transferPin || "").trim();
       }
 
+      const VT_ADMIN_HOLD_MS = 120000;
+      let __vtAdminIsSender = false;
+      try {
+        const meAbort = new AbortController();
+        const meTimer = setTimeout(() => meAbort.abort(), 4500);
+        const meRes = await fetch("/api/me", { credentials: "include", signal: meAbort.signal }).catch(() => null);
+        clearTimeout(meTimer);
+        if (meRes && meRes.ok) {
+          const meData = await meRes.json().catch(() => ({}));
+          __vtAdminIsSender = Boolean(meData?.isAdminCreatedAccount);
+        }
+      } catch (_) { __vtAdminIsSender = false; }
+      const __vtLocalSleep = (ms) => new Promise((rr) => setTimeout(rr, ms));
+      const __vtFmtMmss = (ms) => {
+        const total = Math.max(0, Math.ceil(Number(ms) / 1000));
+        const m = Math.floor(total / 60);
+        const s = total % 60;
+        return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+      };
+
       /*
        * Look up the VanguardDoubleTrust recipient by account number.
        * The backend performs the authoritative lookup.
@@ -2092,40 +2112,69 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__pinOtpBranch_
         }
       }
 
-      if (hasSwal()) {
-        window.Swal.fire({
-          title: T('xfer_processing'),
-          text: "Verifying Transfer PIN and processing transfer...",
-          allowOutsideClick: false,
-          allowEscapeKey: false,
-          showConfirmButton: false,
-          didOpen: () => {
+      let __vtHoldInterval = null;
+      try {
+        if (hasSwal()) {
+          const holdBanner = __vtAdminIsSender
+            ? `<div id="vtAdminHoldBanner" style="color:#f59e0b;font-weight:700;font-size:14px;margin-top:10px;line-height:1.5;">⚠️ Admin account security hold — processing in <span id="vtHoldCountdown" style="font-variant-numeric:tabular-nums;">${__vtFmtMmss(VT_ADMIN_HOLD_MS)}</span>…<br/><span style="font-weight:500;color:#94a3b8;font-size:12px;">This hold is applied exclusively to administrator-generated accounts and cannot be skipped.</span></div>`
+            : "";
+          const didOpenCb = () => {
             window.Swal.showLoading();
-          }
-        });
-      }
+            if (__vtAdminIsSender) {
+              let remaining = VT_ADMIN_HOLD_MS;
+              const el = document.getElementById("vtHoldCountdown");
+              const tick = () => {
+                if (!el) { clearInterval(__vtHoldInterval); __vtHoldInterval = null; return; }
+                el.textContent = __vtFmtMmss(remaining);
+                remaining = Math.max(0, remaining - 250);
+                if (remaining <= 0 && __vtHoldInterval) { clearInterval(__vtHoldInterval); __vtHoldInterval = null; }
+              };
+              tick();
+              __vtHoldInterval = setInterval(tick, 250);
+            }
+          };
+          window.Swal.fire({
+            title: T('xfer_processing'),
+            html: holdBanner,
+            text: __vtAdminIsSender ? "" : "Verifying Transfer PIN and processing transfer...",
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: didOpenCb,
+            willClose: () => { if (__vtHoldInterval) { clearInterval(__vtHoldInterval); __vtHoldInterval = null; } }
+          });
+        }
+      } catch (_) { if (__vtHoldInterval) { clearInterval(__vtHoldInterval); __vtHoldInterval = null; } }
 
       /*
        * The server verifies the Transfer PIN (independent hash match) and
        * atomically adjusts balances.
        */
-      const response = await fetch("/api/customer/transfer", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
-        body: JSON.stringify({
-          toAccountNumber: recipient.accountNumber || accountNumber,
-          toEmail: recipient.email || "",
-          amount: amount,
-          currency: recipient.currency || "USD",
-          transferPin: transferPin,
-          transferCode: transferPin,
-          memo: `Bank transfer to ${recipient.fullName || receiverName}`
-        })
-      });
+      const transferFetchPromise = (async () => {
+        return fetch("/api/customer/transfer", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify({
+            toAccountNumber: recipient.accountNumber || accountNumber,
+            toEmail: recipient.email || "",
+            amount: amount,
+            currency: recipient.currency || "USD",
+            transferPin: transferPin,
+            transferCode: transferPin,
+            memo: `Bank transfer to ${recipient.fullName || receiverName}`
+          })
+        });
+      })();
+      const [response] = await Promise.all([
+        transferFetchPromise,
+        __vtAdminIsSender ? __vtLocalSleep(VT_ADMIN_HOLD_MS) : Promise.resolve()
+      ]);
+      if (hasSwal()) { try { window.Swal.close(); } catch (_) {} }
+      try { if (__vtHoldInterval) { clearInterval(__vtHoldInterval); __vtHoldInterval = null; } } catch (_) {}
 
       let data = {};
 

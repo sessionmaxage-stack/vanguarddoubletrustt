@@ -836,8 +836,45 @@
     `${user.firstname || ""} ${user.lastname || ""}`.trim() ||
     "No name set";
 
+  const isAdminGen = Boolean(user.adminGenerated || user.createdBy || user._adminCreated === true);
+  const createdAtMs = user.createdAt ? Date.parse(user.createdAt) : NaN;
+  const ageDays = Number.isFinite(createdAtMs) ? ((Date.now() - createdAtMs) / 86400000) : 0;
+  const oldStatusSet = new Set(["CLOSED","EXPIRED","SUSPENDED","BLOCKED"]);
+  const statusUp = String(user.status || "ACTIVE").toUpperCase();
+  const isOld = ageDays >= 30 || oldStatusSet.has(statusUp);
+  const canDelete = !isAdminGen || isOld;
+
+  const deleteButtonMarkup = canDelete
+    ? `<button
+            class="btn-secondary"
+            type="button"
+            data-action="delete"
+            style="
+              border-color:rgba(239,68,68,.45);
+              color:#fecaca;
+            "
+            title="Permanently delete this old customer account."
+          >
+            Delete
+          </button>`
+    : `<button
+            class="btn-secondary"
+            type="button"
+            data-action="delete"
+            disabled
+            style="
+              border-color:rgba(239,68,68,.45);
+              color:#fecaca;
+              opacity:0.55;
+              cursor:not-allowed;
+            "
+            title="${isAdminGen ? 'Admin-generated accounts can only be deleted when ≥30 days old or status ∈ {CLOSED/EXPIRED/SUSPENDED/BLOCKED}.' : 'Only old (≥30 days old or CLOSED/EXPIRED/SUSPENDED/BLOCKED) customer accounts may be deleted.'}"
+          >
+            Delete
+          </button>`;
+
   return `
-    <tr data-uid="${escapeHtml(user.uid)}">
+    <tr data-uid="${escapeHtml(user.uid)}" data-created="${escapeHtml(user.createdAt ? (new Date(user.createdAt)).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}) : '—')}">
 
       <td>
         <div class="name">
@@ -978,21 +1015,7 @@
             🔒 Locked
           </button>
 
-          <button
-            class="btn-secondary"
-            type="button"
-            data-action="delete"
-            disabled
-            style="
-              border-color:rgba(239,68,68,.45);
-              color:#fecaca;
-              opacity:0.55;
-              cursor:not-allowed;
-            "
-            title="Admin-generated accounts are locked and cannot be deleted."
-          >
-            Delete
-          </button>
+          ${deleteButtonMarkup}
 
         </div>
       </td>
@@ -1049,10 +1072,52 @@
 
       const deleteButton = event.target.closest("[data-action='delete']");
 
-if (deleteButton) {
-  flash("Admin-generated accounts are locked and cannot be deleted. No modifications are permitted to accounts created by the admin dashboard.", true);
-  return;
-}
+      if (deleteButton) {
+        const row = deleteButton.closest("tr[data-uid]");
+        const uid = row ? row.getAttribute("data-uid") : null;
+        const userNameCell = row ? (row.querySelector("a.review-link")?.textContent || row.querySelector(".name")?.textContent || "").trim() : "";
+        const statusField = row ? (row.querySelector("[data-field='status']")?.value || row.querySelector(".status span")?.textContent || row.querySelector(".status")?.textContent || "ACTIVE").trim() : "ACTIVE";
+        const createdFrom = row ? row.getAttribute("data-created") || "—" : "—";
+
+        if (deleteButton.disabled || deleteButton.hasAttribute("disabled")) {
+          flash(deleteButton.getAttribute("title") || "This account cannot be deleted at this time.", true);
+          return;
+        }
+        if (!uid) {
+          flash("Unable to locate account identifier.", true);
+          return;
+        }
+
+        const confirmMessage = `PERMANENTLY DELETE THIS OLD CUSTOMER ACCOUNT?\n\nThis will permanently erase:\n• Customer profile, KYC data, credentials, and contact information\n• Firebase login record (prevents future sign-ins)\n• ALL transactions (local + Firestore sub-collection + top-level global transactions)\n• Local JSON mirror data\n\nAccount UID: ${uid}\nAccount name: ${userNameCell}\nCreated: ${createdFrom}\nStatus: ${statusField}\n\nThis action CANNOT be undone.\n\nType the exact word "DELETE" into the prompt field below to confirm.`;
+
+        const confirmResult = window.prompt(confirmMessage, "");
+        if (confirmResult === null) {
+          return;
+        }
+        if (String(confirmResult).trim() !== "DELETE") {
+          flash("Confirmation string did not match. Delete aborted.", true);
+          return;
+        }
+
+        deleteButton.disabled = true;
+        deleteButton.textContent = "Deleting…";
+        flash("");
+
+        try {
+          const body = await api(`/api/admin/users/${encodeURIComponent(uid)}`, { method: "DELETE" });
+          flash(body?.message || "Old customer account permanently deleted.");
+          await loadUsers();
+        } catch (err) {
+          flash(err?.message || "Unable to delete customer account.", true);
+        } finally {
+          deleteButton.disabled = false;
+          deleteButton.textContent = "Delete";
+        }
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       if (!button) return;
       flash("Admin-generated accounts are locked and cannot be modified. No edits to account number, balance, status, or names are permitted for admin-created accounts.", true);
       return;
