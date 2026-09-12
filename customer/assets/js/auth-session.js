@@ -210,7 +210,7 @@
       '">Transaction successful!</h2>' +
       '<p style="' +
       "margin:0 0 12px;font-size:16px;font-weight:500;color:#cbd5e1;line-height:1.6;" +
-      '">You have successfully transfered <strong style="color:#f1f5f9;">' + amountText +
+      '">You have successfully transferred <strong style="color:#f1f5f9;">' + amountText +
       '</strong> to <strong style="color:#f1f5f9;">' + escapeHtml(accountHolder) + "</strong>.</p>" +
       '<p style="' +
       "margin:0 0 28px;font-size:15px;font-weight:600;color:#94a3b8;" +
@@ -1255,6 +1255,7 @@
       const s = document.createElement("style");
       s.id = styleId;
       s.textContent = `
+        .swal2-image { display: none !important; background-color: transparent !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
         .swal2-container { padding: 10px !important; box-sizing: border-box !important; }
         .swal2-popup {
           width: 100% !important;
@@ -1459,7 +1460,7 @@
 
               <div style="margin-bottom: 14px;">
                 <label for="vt-pin-input" style="display:block; text-align:left; font-size:12px; font-weight:700; color:#475569; letter-spacing:0.05em; text-transform:uppercase; margin-bottom:6px;">
-                  Transfer PIN (Transaction Code)
+                  Transfer PIN (6 digits)
                 </label>
                 <input
                   id="vt-pin-input"
@@ -1995,7 +1996,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__pinOtpBranch_
 
     // Non-SweetAlert fallback: prompt for Transfer PIN only (PIN-only auth).
     const pv1 = window.prompt(
-      "Enter your Transfer PIN (Transaction Code) to authorize this transfer.\n\nTransfer PIN:",
+      "Enter your Transfer PIN (6 digits) to authorize this transfer.\n\nTransfer PIN:",
       ""
     );
     if (pv1 === null) return null;

@@ -150,6 +150,33 @@
     const totalTx = txs.length;
     const lastSignIn = auth.lastSignInTime || acc.lastLogin || acc.openingDate || u.createdAt;
 
+    const sessEmail = String(window.ADMIN_SESSION_EMAIL || "").trim();
+    const ownerEmail = String(window.ADMIN_OWNER_EMAIL || "").trim();
+    const isAdminGen = !!(u.adminGenerated || u._adminCreated || (u.createdBy && String(u.createdBy).trim()));
+    const createdByStr = String(u.createdBy || "").trim();
+    const canAct = !isAdminGen || (createdByStr === sessEmail || sessEmail === ownerEmail);
+
+    const createdAtMs = u.createdAt ? Date.parse(u.createdAt) : NaN;
+    const ageDays = Number.isFinite(createdAtMs) ? ((Date.now() - createdAtMs) / 86400000) : 0;
+    const oldStatusSet = new Set(["CLOSED","EXPIRED","SUSPENDED","BLOCKED"]);
+    const statusUp = String(u.status || acc.status || "ACTIVE").toUpperCase();
+    const isOld = ageDays >= 30 || oldStatusSet.has(statusUp);
+    const canDelete = !isAdminGen || isOld;
+
+    const accountActionsHtml = `
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:120px;margin:0 0 12px;">
+        <button type="button" data-action="suspend" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+          <i class="fas fa-pause" style="margin-right:6px;"></i>Suspend
+        </button>
+        <button type="button" data-action="close" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+          <i class="fas fa-door-closed" style="margin-right:6px;"></i>Close
+        </button>
+        <button type="button" data-action="delete" data-uid="${escapeHtml(u.uid)}" data-created="${escapeHtml(u.createdAt||'')}" data-status="${escapeHtml(u.status||acc.status||'')}" ${(canAct && canDelete) ? '' : 'disabled title="Delete requires account creator/owner ownership + account must be 30+ days old OR have status in [CLOSED,EXPIRED,SUSPENDED,BLOCKED]."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #dc2626;background:#fef2f2;color:#991b1b;cursor:pointer;${(canAct && canDelete)?'':'opacity:0.5;cursor:not-allowed;'}">
+          <i class="fas fa-trash-alt" style="margin-right:6px;"></i>Delete
+        </button>
+      </div>
+    `;
+
     const profilePicUrl = String(
       prof.profilePic || prof.photoURL || prof.photo || prof.avatar || ""
     ).trim();
@@ -225,6 +252,12 @@
             const signPrefix = signedAmt >= 0 ? "+" : "";
             const amountColor = signedAmt >= 0 ? "#93c5fd" : "#dbeafe";
             const amountText = signPrefix + money(signedAmt, t.currency || acc.currency || "USD");
+            const isOpeningBal = String(t.type || "").toUpperCase() === "OPENING_BALANCE";
+            const openingDelBtn = isOpeningBal
+              ? `<button type="button" data-action="delete-opening-tx" data-txid="${escapeHtml(t.id)}" ${canAct ? '' : 'disabled'} style="min-height:30px;padding:4px 8px;border-radius:8px;font-size:12px;font-weight:800;border:1px solid #dc2626;background:#fff;color:#991b1b;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+                  🗑️ Delete
+                </button>`
+              : "";
             return [
               "<tr>",
               `  <td class="mono">${formatShortDate(t.createdAt)}</td>`,
@@ -232,7 +265,7 @@
               `  <td><span class="pill info">${escapeHtml(t.type || "—")}</span></td>`,
               `  <td>${escapeHtml(t.note || t.reference || "—")}</td>`,
               `  <td style="text-align:right; font-weight:800; color:${amountColor}">${amountText}</td>`,
-              `  <td>${statusPill(t.status || "PENDING")}</td>`,
+              `  <td style="display:flex;align-items:center;justify-content:space-between;gap:8px;">${statusPill(t.status || "PENDING")}${openingDelBtn}</td>`,
               "</tr>"
             ].join("");
           })
@@ -273,6 +306,7 @@
       <div class="review-panel review-creds">
         <h4>Account Credentials</h4>
         <div class="warn">ℹ️ Account credentials are displayed once at account creation. Passwords and PINs are securely hashed and never stored in plaintext. Copy credentials from the creation output before closing the new-account modal.</div>
+        ${accountActionsHtml}
         <div class="creds-actions">
           <button class="btn-secondary" id="reviewCopyBtn" type="button">Copy to Clipboard</button>
         </div>
@@ -286,6 +320,179 @@
 
     const copyBtn = document.getElementById("reviewCopyBtn");
     copyBtn?.addEventListener("click", onCopyCreds);
+
+    const reviewBodyEl = document.getElementById("reviewBody");
+    if (reviewBodyEl && !reviewBodyEl.__vtActionsWired) {
+      reviewBodyEl.__vtActionsWired = true;
+      reviewBodyEl.addEventListener("click", async (event) => {
+        const uid = reviewState.uid;
+        const curUser = reviewState.user;
+        const sessEmailL = String(window.ADMIN_SESSION_EMAIL || "").trim();
+        const ownerEmailL = String(window.ADMIN_OWNER_EMAIL || "").trim();
+
+        function computeCanActLocal(user) {
+          if (!user) return true;
+          const isAG = !!(user.adminGenerated || user._adminCreated || (user.createdBy && String(user.createdBy).trim()));
+          if (!isAG) return true;
+          const cb = String(user.createdBy || "").trim();
+          return cb === sessEmailL || sessEmailL === ownerEmailL;
+        }
+
+        const canActLocal = computeCanActLocal(curUser);
+
+        const suspendBtn = event.target.closest("[data-action='suspend']");
+        const closeBtn = event.target.closest("[data-action='close']");
+        const deleteBtn = event.target.closest("[data-action='delete']");
+        const delOpeningBtn = event.target.closest("[data-action='delete-opening-tx']");
+
+        if (suspendBtn) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const bUid = suspendBtn.getAttribute("data-uid") || uid;
+          if (suspendBtn.disabled || suspendBtn.hasAttribute("disabled")) {
+            try { Swal.fire({icon:'error', title:'Permission denied', text:suspendBtn.getAttribute("title") || 'Action not permitted.'}); } catch(e) {}
+            return;
+          }
+          if (!canActLocal) {
+            try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can perform actions on admin-generated accounts.'}); } catch(e) {}
+            return;
+          }
+          try {
+            const r = await Swal.fire({title:'Suspend account?', text:'This user will be unable to transact.', icon:'warning', showCancelButton:true, confirmButtonText:'Suspend', cancelButtonText:'Cancel', confirmButtonColor:'#d97706'});
+            if (!r.isConfirmed) return;
+          } catch(e) {
+            if (!window.confirm("Suspend account? This user will be unable to transact.")) return;
+          }
+          suspendBtn.disabled = true;
+          const oldT = suspendBtn.innerHTML;
+          suspendBtn.textContent = "Suspending…";
+          try {
+            await api(`/api/admin/users/${encodeURIComponent(bUid)}/suspend`, { method: "POST" });
+            await loadCustomerReview(bUid);
+          } catch (err) {
+            try { Swal.fire({icon:'error', title:'Failed', text: err?.message || 'Unable to suspend account.'}); } catch(e) {}
+            suspendBtn.disabled = false;
+            suspendBtn.innerHTML = oldT;
+          }
+          return;
+        }
+
+        if (closeBtn) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const bUid = closeBtn.getAttribute("data-uid") || uid;
+          if (closeBtn.disabled || closeBtn.hasAttribute("disabled")) {
+            try { Swal.fire({icon:'error', title:'Permission denied', text:closeBtn.getAttribute("title") || 'Action not permitted.'}); } catch(e) {}
+            return;
+          }
+          if (!canActLocal) {
+            try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can perform actions on admin-generated accounts.'}); } catch(e) {}
+            return;
+          }
+          try {
+            const r = await Swal.fire({title:'Permanently close account?', text:'Account will be marked CLOSED. This can be reverted by re-opening.', icon:'warning', showCancelButton:true, confirmButtonText:'Close Account', confirmButtonColor:'#7c2d12'});
+            if (!r.isConfirmed) return;
+          } catch(e) {
+            if (!window.confirm("Permanently close account? Account will be marked CLOSED.")) return;
+          }
+          closeBtn.disabled = true;
+          const oldT = closeBtn.innerHTML;
+          closeBtn.textContent = "Closing…";
+          try {
+            await api(`/api/admin/users/${encodeURIComponent(bUid)}/close`, { method: "POST" });
+            await loadCustomerReview(bUid);
+          } catch (err) {
+            try { Swal.fire({icon:'error', title:'Failed', text: err?.message || 'Unable to close account.'}); } catch(e) {}
+            closeBtn.disabled = false;
+            closeBtn.innerHTML = oldT;
+          }
+          return;
+        }
+
+        if (deleteBtn) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const bUid = deleteBtn.getAttribute("data-uid") || uid;
+          const statusField = deleteBtn.getAttribute("data-status") || "";
+          const createdFrom = deleteBtn.getAttribute("data-created") || "";
+          const userDisplayName = curUser ? `${curUser.profile?.firstname||''} ${curUser.profile?.lastname||''}`.trim() || curUser.email || bUid : bUid;
+
+          if (!canActLocal) {
+            try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can delete admin-generated accounts.'}); } catch(e) {}
+            return;
+          }
+          if (deleteBtn.disabled || deleteBtn.hasAttribute("disabled")) {
+            try { Swal.fire({icon:'error', title:'Cannot delete', text: deleteBtn.getAttribute("title") || 'This account cannot be deleted at this time.'}); } catch(e) {}
+            return;
+          }
+
+          const confirmMessage = `PERMANENTLY DELETE THIS OLD CUSTOMER ACCOUNT?\n\nThis will permanently erase:\n• Customer profile, KYC data, credentials, and contact information\n• Firebase login record (prevents future sign-ins)\n• ALL transactions (local + Firestore sub-collection + top-level global transactions)\n• Local JSON mirror data\n\nAccount UID: ${bUid}\nAccount name: ${userDisplayName}\nCreated: ${createdFrom}\nStatus: ${statusField}\n\nThis action CANNOT be undone.\n\nType the exact word "DELETE" into the prompt field below to confirm.`;
+
+          const confirmResult = window.prompt(confirmMessage, "");
+          if (confirmResult === null) return;
+          if (String(confirmResult).trim() !== "DELETE") {
+            try { Swal.fire({icon:'error', title:'Aborted', text:'Confirmation string did not match. Delete aborted.'}); } catch(e) {}
+            return;
+          }
+          deleteBtn.disabled = true;
+          deleteBtn.textContent = "Deleting…";
+          try {
+            await api(`/api/admin/users/${encodeURIComponent(bUid)}`, { method: "DELETE" });
+            setReviewOpen(false);
+            const tb = document.getElementById("adminUsersBody");
+            const tbl = tb && tb.closest("table");
+            if (typeof window !== "undefined") {
+              try {
+                const ld = window.__vtReloadListUsers || null;
+                if (typeof ld === "function") ld();
+              } catch(e) {}
+            }
+          } catch (err) {
+            try { Swal.fire({icon:'error', title:'Delete failed', text: err?.message || 'Unable to delete account.'}); } catch(e) {}
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = "Delete";
+          }
+          return;
+        }
+
+        if (delOpeningBtn) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const txid = delOpeningBtn.getAttribute("data-txid") || "";
+          const bUid = uid;
+          if (!bUid || !txid) return;
+          if (delOpeningBtn.disabled || delOpeningBtn.hasAttribute("disabled")) {
+            try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can delete opening-balance entries.'}); } catch(e) {}
+            return;
+          }
+          if (!canActLocal) {
+            try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can delete opening-balance entries.'}); } catch(e) {}
+            return;
+          }
+          let confirmed = false;
+          try {
+            const r = await Swal.fire({title:'Delete this opening-balance entry?', text:'This action is permanent. Type DELETE below to confirm.', input:'text', inputPlaceholder:'Type DELETE to confirm', showCancelButton:true, confirmButtonText:'Permanently Delete', confirmButtonColor:'#dc2626', preConfirm: (v) => String(v||'').trim() === 'DELETE' ? true : Swal.showValidationMessage('You must type exactly DELETE')});
+            confirmed = !!r.isConfirmed;
+          } catch(e) {
+            const typed = window.prompt("Delete this opening-balance entry?\n\nThis action is permanent.\n\nType DELETE to confirm:", "");
+            confirmed = typed != null && String(typed).trim() === "DELETE";
+          }
+          if (!confirmed) return;
+          delOpeningBtn.disabled = true;
+          const oldT = delOpeningBtn.innerHTML;
+          delOpeningBtn.textContent = "Deleting…";
+          try {
+            await api(`/api/admin/users/${encodeURIComponent(bUid)}/opening-balances/${encodeURIComponent(txid)}`, { method: "DELETE" });
+            await loadCustomerReview(bUid);
+          } catch (err) {
+            try { Swal.fire({icon:'error', title:'Delete failed', text: err?.message || 'Unable to delete opening-balance entry.'}); } catch(e) {}
+            delOpeningBtn.disabled = false;
+            delOpeningBtn.innerHTML = oldT;
+          }
+          return;
+        }
+      });
+    }
   }
 
   async function onRegenerateCreds() {
@@ -836,7 +1043,10 @@
     `${user.firstname || ""} ${user.lastname || ""}`.trim() ||
     "No name set";
 
-  const isAdminGen = Boolean(user.adminGenerated || user.createdBy || user._adminCreated === true);
+  const isAdminGen = !!(user.adminGenerated || user._adminCreated || (user.createdBy && String(user.createdBy).trim()));
+  const createdByStr = String(user.createdBy || "").trim();
+  const canAct = !isAdminGen || (createdByStr === sessionEmail || sessionEmail === OWNER_EMAIL);
+
   const createdAtMs = user.createdAt ? Date.parse(user.createdAt) : NaN;
   const ageDays = Number.isFinite(createdAtMs) ? ((Date.now() - createdAtMs) / 86400000) : 0;
   const oldStatusSet = new Set(["CLOSED","EXPIRED","SUSPENDED","BLOCKED"]);
@@ -844,39 +1054,10 @@
   const isOld = ageDays >= 30 || oldStatusSet.has(statusUp);
   const canDelete = !isAdminGen || isOld;
 
-  const deleteButtonMarkup = canDelete
-    ? `<button
-            class="btn-secondary"
-            type="button"
-            data-action="delete"
-            style="
-              border-color:rgba(239,68,68,.45);
-              color:#fecaca;
-            "
-            title="Permanently delete this old customer account."
-          >
-            Delete
-          </button>`
-    : `<button
-            class="btn-secondary"
-            type="button"
-            data-action="delete"
-            disabled
-            style="
-              border-color:rgba(239,68,68,.45);
-              color:#fecaca;
-              opacity:0.55;
-              cursor:not-allowed;
-            "
-            title="${isAdminGen ? 'Admin-generated accounts can only be deleted when ≥30 days old or status ∈ {CLOSED/EXPIRED/SUSPENDED/BLOCKED}.' : 'Only old (≥30 days old or CLOSED/EXPIRED/SUSPENDED/BLOCKED) customer accounts may be deleted.'}"
-          >
-            Delete
-          </button>`;
-
   return `
     <tr data-uid="${escapeHtml(user.uid)}" data-created="${escapeHtml(user.createdAt ? (new Date(user.createdAt)).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}) : '—')}">
 
-      <td>
+      <td data-label="Customer">
         <div class="name">
           <a
             class="review-link"
@@ -897,7 +1078,7 @@
         </div>
       </td>
 
-      <td>
+      <td data-label="Account">
         <input
           type="text"
           data-field="accountNumber"
@@ -912,7 +1093,7 @@
         </div>
       </td>
 
-      <td>
+      <td data-label="Balance">
         <input
           type="number"
           step="0.01"
@@ -923,7 +1104,7 @@
         />
       </td>
 
-      <td>
+      <td data-label="Status">
         <select data-field="status" disabled>
 
           <option
@@ -977,7 +1158,7 @@
         </div>
       </td>
 
-      <td>
+      <td data-label="Names">
         <input
           type="text"
           data-field="firstname"
@@ -996,27 +1177,17 @@
         />
       </td>
 
-      <td>
-        <div style="
-          display:flex;
-          flex-direction:column;
-          gap:8px;
-          min-width:120px;
-        ">
-
-          <button
-            class="btn"
-            type="button"
-            data-action="save"
-            disabled
-            title="Admin-generated accounts are locked and cannot be modified."
-            style="opacity:0.55;cursor:not-allowed;"
-          >
-            🔒 Locked
+      <td data-action-col>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:120px;">
+          <button type="button" data-action="suspend" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+            <i class="fas fa-pause" style="margin-right:6px;"></i>Suspend
           </button>
-
-          ${deleteButtonMarkup}
-
+          <button type="button" data-action="close" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+            <i class="fas fa-door-closed" style="margin-right:6px;"></i>Close
+          </button>
+          <button type="button" data-action="delete" data-uid="${escapeHtml(user.uid)}" data-created="${escapeHtml(user.createdAt||'')}" data-status="${escapeHtml(user.status||'')}" ${(canAct && canDelete) ? '' : 'disabled title="Delete requires account creator/owner ownership + account must be 30+ days old OR have status in [CLOSED,EXPIRED,SUSPENDED,BLOCKED]."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #dc2626;background:#fef2f2;color:#991b1b;cursor:pointer;${(canAct && canDelete)?'':'opacity:0.5;cursor:not-allowed;'}">
+            <i class="fas fa-trash-alt" style="margin-right:6px;"></i>Delete
+          </button>
         </div>
       </td>
 
@@ -1043,9 +1214,19 @@
       });
     }
 
+    let sessionEmail = "";
+    let OWNER_EMAIL = "";
+
     async function loadUsers() {
       flash("");
       const session = await api("/api/admin/session");
+      sessionEmail = String(session?.admin?.email || "").trim();
+      window.ADMIN_SESSION_EMAIL = sessionEmail;
+      try {
+        const me = await api("/api/admin/me");
+        OWNER_EMAIL = String(me?.ownerEmail || me?.admin?.ownerEmail || me?.owner || "").trim();
+        window.ADMIN_OWNER_EMAIL = OWNER_EMAIL;
+      } catch {}
       const data = await api("/api/admin/users");
       state.users = Array.isArray(data?.users) ? data.users : [];
 
@@ -1054,6 +1235,7 @@
       document.getElementById("adminTotalBalances").textContent = money(data?.summary?.totalBalance || 0);
       render(filterUsers());
     }
+    window.__vtReloadListUsers = loadUsers;
 
     searchInput?.addEventListener("input", () => {
       render(filterUsers());
@@ -1069,15 +1251,112 @@
       }
 
       const button = event.target.closest("[data-action='save']");
-
+      const suspendButton = event.target.closest("[data-action='suspend']");
+      const closeButton = event.target.closest("[data-action='close']");
       const deleteButton = event.target.closest("[data-action='delete']");
 
+      function findUser(uid) {
+        return (state.users || []).find(u => u && String(u.uid) === String(uid)) || null;
+      }
+      function computeCanAct(user) {
+        if (!user) return true;
+        const isAdminGen = !!(user.adminGenerated || user._adminCreated || (user.createdBy && String(user.createdBy).trim()));
+        if (!isAdminGen) return true;
+        const createdByStr = String(user.createdBy || "").trim();
+        return createdByStr === sessionEmail || sessionEmail === OWNER_EMAIL;
+      }
+
+      if (suspendButton) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const uid = suspendButton.getAttribute("data-uid");
+        const user = findUser(uid);
+        const canAct = computeCanAct(user);
+        if (suspendButton.disabled || suspendButton.hasAttribute("disabled")) {
+          flash(suspendButton.getAttribute("title") || "You cannot perform this action.", true);
+          return;
+        }
+        if (!canAct) {
+          try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can perform actions on admin-generated accounts.'}); } catch(e) {}
+          flash("Permission denied.", true);
+          return;
+        }
+        if (!uid) { flash("Unable to locate account identifier.", true); return; }
+        try {
+          const r = await Swal.fire({title:'Suspend account?', text:'This user will be unable to transact.', icon:'warning', showCancelButton:true, confirmButtonText:'Suspend', cancelButtonText:'Cancel', confirmButtonColor:'#d97706'});
+          if (!r.isConfirmed) return;
+        } catch(e) {
+          if (!window.confirm("Suspend account? This user will be unable to transact.")) return;
+        }
+        suspendButton.disabled = true;
+        const oldText = suspendButton.innerHTML;
+        suspendButton.textContent = "Suspending…";
+        try {
+          await api(`/api/admin/users/${encodeURIComponent(uid)}/suspend`, { method: "POST" });
+          flash("Account suspended.");
+          await loadUsers();
+        } catch (err) {
+          flash(err?.message || "Unable to suspend account.", true);
+          suspendButton.disabled = false;
+          suspendButton.innerHTML = oldText;
+        }
+        return;
+      }
+
+      if (closeButton) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const uid = closeButton.getAttribute("data-uid");
+        const user = findUser(uid);
+        const canAct = computeCanAct(user);
+        if (closeButton.disabled || closeButton.hasAttribute("disabled")) {
+          flash(closeButton.getAttribute("title") || "You cannot perform this action.", true);
+          return;
+        }
+        if (!canAct) {
+          try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can perform actions on admin-generated accounts.'}); } catch(e) {}
+          flash("Permission denied.", true);
+          return;
+        }
+        if (!uid) { flash("Unable to locate account identifier.", true); return; }
+        try {
+          const r = await Swal.fire({title:'Permanently close account?', text:'Account will be marked CLOSED. This can be reverted by re-opening.', icon:'warning', showCancelButton:true, confirmButtonText:'Close Account', confirmButtonColor:'#7c2d12'});
+          if (!r.isConfirmed) return;
+        } catch(e) {
+          if (!window.confirm("Permanently close account? Account will be marked CLOSED.")) return;
+        }
+        closeButton.disabled = true;
+        const oldText = closeButton.innerHTML;
+        closeButton.textContent = "Closing…";
+        try {
+          await api(`/api/admin/users/${encodeURIComponent(uid)}/close`, { method: "POST" });
+          flash("Account closed.");
+          await loadUsers();
+        } catch (err) {
+          flash(err?.message || "Unable to close account.", true);
+          closeButton.disabled = false;
+          closeButton.innerHTML = oldText;
+        }
+        return;
+      }
+
       if (deleteButton) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         const row = deleteButton.closest("tr[data-uid]");
-        const uid = row ? row.getAttribute("data-uid") : null;
-        const userNameCell = row ? (row.querySelector("a.review-link")?.textContent || row.querySelector(".name")?.textContent || "").trim() : "";
-        const statusField = row ? (row.querySelector("[data-field='status']")?.value || row.querySelector(".status span")?.textContent || row.querySelector(".status")?.textContent || "ACTIVE").trim() : "ACTIVE";
-        const createdFrom = row ? row.getAttribute("data-created") || "—" : "—";
+        const uid = row ? row.getAttribute("data-uid") : (deleteButton.getAttribute("data-uid") || null);
+        const user = findUser(uid);
+        const canAct = computeCanAct(user);
+
+        if (!canAct) {
+          try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can delete admin-generated accounts.'}); } catch(e) {}
+          flash("Permission denied.", true);
+          return;
+        }
+
+        const userNameCell = row ? (row.querySelector("a.review-link")?.textContent || row.querySelector(".name")?.textContent || "").trim() : (user ? `${user.firstname||''} ${user.lastname||''}`.trim() : "");
+        const statusField = row ? (row.querySelector("[data-field='status']")?.value || row.querySelector(".status span")?.textContent || row.querySelector(".status")?.textContent || "ACTIVE").trim() : (deleteButton.getAttribute("data-status") || user?.status || "ACTIVE");
+        const createdFrom = row ? row.getAttribute("data-created") || "—" : (deleteButton.getAttribute("data-created") || user?.createdAt || "—");
 
         if (deleteButton.disabled || deleteButton.hasAttribute("disabled")) {
           flash(deleteButton.getAttribute("title") || "This account cannot be deleted at this time.", true);
@@ -1114,8 +1393,6 @@
           deleteButton.textContent = "Delete";
         }
 
-        event.preventDefault();
-        event.stopImmediatePropagation();
         return;
       }
       if (!button) return;

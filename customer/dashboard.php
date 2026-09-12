@@ -1397,7 +1397,7 @@
             <input type="text" data-i18n-placeholder="search" placeholder="Type credit or debit..." />
           </div>
         </div>
-
+        <div id="langDropdownContainer" class="vt-lang-wrap" style="flex:0 0 auto;"></div>
         <div class="vt-top-right">
           <div class="vt-user">
             <div class="avatar" id="avatarInitials">VT</div>
@@ -2215,6 +2215,7 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="assets/js/auth-session.js?v=20260817b"></script>
   <script src="assets/js/customer-i18n.js?v=20260817b"></script>
+  <script src="assets/js/runtime-config.js"></script>
 
   <script>
     (function() {
@@ -3181,6 +3182,18 @@
             // IMPORTANT:
             // KYC + profile picture onboarding handled exclusively during admin account creation.
             // No post-login prompts are shown to users.
+
+            try {
+              VT.I18N.setLang((window.__ctx && __ctx.preferredLanguage) || (localStorage['vt.lang']) || 'en');
+            } catch (e) {}
+            try {
+              VT.I18N.bootstrapLangElements(document);
+            } catch (e) {}
+            try {
+              VT.UI.initLangDropdown(document.getElementById('langDropdownContainer'), {
+                saveEndpoint: '/api/customer/profile'
+              });
+            } catch (e) {}
 
             var me = (ctx && ctx.me) ? ctx.me : null;
 

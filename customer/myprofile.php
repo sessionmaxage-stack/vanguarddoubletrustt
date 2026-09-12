@@ -625,6 +625,120 @@
       display: block;
     }
 
+    .vt-page-scroll {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .vt-page-scroll table {
+      min-width: 600px;
+    }
+
+    @media (max-width: 1100px) {
+
+      body .wrap,
+      body .container-fluid,
+      body .cardx,
+      body main,
+      body section {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+      }
+    }
+
+    @media (max-width: 992px) {
+
+      .hero,
+      .topbar,
+      .vt-topbar,
+      header.page-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+      }
+
+      .hero h1,
+      .topbar h1,
+      header.page-header h1 {
+        font-size: 18px !important;
+      }
+    }
+
+    @media (max-width: 720px) {
+
+      .card-grid,
+      .grid-2col,
+      .grid-3col,
+      .grid-4col,
+      [class*="grid-"][style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+      }
+
+      body,
+      body .wrap,
+      .hero,
+      .cardx,
+      .bodyx,
+      main,
+      section {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+      }
+
+      table.card-table,
+      .statement-table,
+      .tx-table,
+      .transfer-table {
+        font-size: 12px;
+      }
+
+      .btn,
+      button,
+      .btn-logout,
+      input[type=submit],
+      select {
+        min-height: 44px !important;
+        touch-action: manipulation;
+      }
+
+      input,
+      select,
+      textarea {
+        min-height: 44px;
+        font-size: 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero {
+        padding: 16px 14px !important;
+      }
+
+      .bodyx {
+        padding: 16px 14px 20px !important;
+      }
+
+      h1 {
+        font-size: 17px !important;
+      }
+
+      h2 {
+        font-size: 15px !important;
+      }
+
+      .swal2-popup {
+        max-width: 96vw !important;
+      }
+
+      #langDropdownContainer select {
+        max-width: 100%;
+        width: 100%;
+      }
+    }
+
     /* ===== BRIGHT READABLE BUTTONS (LOGOUT / PROCEED / DANGER / ACTION) ===== */
     #vtDashNewTxBtn,
     #vtCustomNewTxBtn {
@@ -876,6 +990,8 @@
           </div>
         </div>
 
+        <div id="langDropdownContainer" style="flex: 0 0 auto; margin: 0 8px;"></div>
+
         <div class="vt-user">
           <div class="avatar" id="avatarInitials">VT</div>
           <div class="meta">
@@ -973,8 +1089,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="assets/js/auth-session.js?v=20260817b"></script>
   <script src="assets/js/customer-i18n.js?v=20260817b"></script>
+  <script src="assets/js/runtime-config.js"></script>
+  <script src="assets/js/auth-session.js?v=20260817b"></script>
   <script>
     (function() {
       function getUserInitials(me) {
@@ -1143,6 +1260,39 @@
           false
         );
       }
+    })();
+  </script>
+  <script>
+    (function() {
+      function bootstrap() {
+        try {
+          if (typeof VT !== "undefined" && VT.I18N && typeof VT.I18N.setLang === "function") {
+            var saved = "en";
+            try {
+              saved = localStorage.getItem("vt.lang") || saved;
+            } catch (e) {}
+            try {
+              if (window.__ctx && __ctx.preferredLanguage) saved = __ctx.preferredLanguage;
+            } catch (e) {}
+            VT.I18N.setLang(saved);
+          }
+        } catch (e) {}
+        try {
+          if (typeof VT !== "undefined" && VT.I18N && typeof VT.I18N.bootstrapLangElements === "function") {
+            VT.I18N.bootstrapLangElements(document);
+          }
+        } catch (e) {}
+        try {
+          var cont = document.getElementById("langDropdownContainer");
+          if (cont && typeof VT !== "undefined" && VT.UI && typeof VT.UI.initLangDropdown === "function") {
+            VT.UI.initLangDropdown(cont, {
+              saveEndpoint: "/api/customer/profile"
+            });
+          }
+        } catch (e) {}
+      }
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootstrap);
+      else bootstrap();
     })();
   </script>
 </body>

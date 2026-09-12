@@ -193,11 +193,12 @@
       <div class="cardx">
         <div class="hero">
           <div>
-            <h1 id="accountTitle">Welcome</h1>
+            <h1 id="accountTitle" data-i18n="hero_welcome">Welcome</h1>
             <div class="small" style="opacity: 0.85">Session-protected account area</div>
           </div>
+          <div id="langDropdownContainer" style="flex: 0 0 auto;"></div>
           <button class="btn-logout" id="logoutBtn" type="button">
-            Logout <i class="fas fa-arrow-right ms-2"></i>
+            <span data-i18n="nav_logout">Logout</span> <i class="fas fa-arrow-right ms-2"></i>
           </button>
         </div>
         <div class="bodyx">
@@ -210,6 +211,26 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="assets/js/customer-i18n.js"></script>
+    <script src="assets/js/runtime-config.js"></script>
+<script>
+(function(){
+  function bootstrap(){
+    if (typeof VT !== "undefined" && VT.I18N && typeof VT.I18N.setLang === "function") {
+      var saved = "en";
+      try { saved = localStorage.getItem("vt.lang") || saved; } catch(e){}
+      VT.I18N.setLang(saved);
+      VT.I18N.bootstrapLangElements(document);
+    }
+    var cont = document.getElementById("langDropdownContainer");
+    if (cont && typeof VT !== "undefined" && VT.UI && typeof VT.UI.initLangDropdown === "function") {
+      VT.UI.initLangDropdown(cont, {saveEndpoint:"/api/customer/profile"});
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootstrap);
+  else bootstrap();
+})();
+</script>
     <script src="assets/js/auth-session.js"></script>
   </body>
 </html>

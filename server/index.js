@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const dns = require("dns");
+const admin = require("firebase-admin");
 try {
   if (dns && typeof dns.setDefaultResultOrder === "function") {
     dns.setDefaultResultOrder("ipv4first");
@@ -419,6 +420,30 @@ async function writeTransaction({ uid, type, amount, currency, status, note, fro
   return { id: txId, ...payload };
 }
 
+function appendAdminAudit({adminEmail, action, targetUid, details}) {
+  const db = getFirestore();
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const payload = {
+    timestamp,
+    adminEmail: adminEmail || null,
+    action: String(action || ""),
+    targetUid: targetUid || null,
+    details: details || {}
+  };
+  db.collection("adminAudit").add(payload).catch(() => {});
+  const auditDir = path.join(__dirname, "data");
+  try { fs.mkdirSync(auditDir, { recursive: true }); } catch (_) {}
+  const auditFile = path.join(auditDir, "adminAudit.jsonl");
+  const jsonlPayload = {
+    timestamp: new Date().toISOString(),
+    adminEmail: adminEmail || null,
+    action: String(action || ""),
+    targetUid: targetUid || null,
+    details: details || {}
+  };
+  try { fs.appendFileSync(auditFile, JSON.stringify(jsonlPayload) + "\n"); } catch (_) {}
+}
+
 function isStrongSecret(value) {
   const s = String(value || "");
   return s.length >= 8 && /[A-Z]/.test(s) && /\d/.test(s) && /[^A-Za-z0-9]/.test(s);
@@ -456,6 +481,40 @@ function isAdminGeneratedAccount(userDataOrUid) {
   if (userData._adminCreated === true) return true;
 
   return false;
+}
+
+async function applyAccountStatusMutation(targetUid, requestedStatus, isAdminInitiated=false, context={}) {
+  const upperStatus = String(requestedStatus || "").toUpperCase();
+  const preventedStatuses = ["LOCKED","BLOCKED","RESTRICTED","SUSPENDED","INACCESSIBLE"];
+  if (isAdminGeneratedAccount(targetUid) === true && !isAdminInitiated && preventedStatuses.includes(upperStatus)) {
+    appendAdminAudit({action:"PREVENTED_AUTO_LOCK", targetUid, details:{requestedStatus:upperStatus, context}});
+    return {success:false, prevented:true};
+  }
+  const db = getFirestore();
+  const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+  const nowIso = new Date().toISOString();
+  try {
+    const userRef = db.collection("users").doc(String(targetUid));
+    await userRef.set({
+      account: { status: upperStatus },
+      "account.status": upperStatus,
+      updatedAt: serverTimestamp
+    }, { merge: true });
+  } catch (_) {}
+  try {
+    const localUsers = readLocalUsers();
+    if (localUsers[targetUid]) {
+      const cur = localUsers[targetUid] || {};
+      const curAccount = cur.account || {};
+      curAccount.status = upperStatus;
+      cur.account = curAccount;
+      cur.updatedAt = nowIso;
+      localUsers[targetUid] = cur;
+      writeLocalUsers(localUsers);
+    }
+  } catch (_) {}
+  appendAdminAudit({adminEmail: context.by || null, action:"STATUS_MUTATION", targetUid, details:{requestedStatus:upperStatus, isAdminInitiated, context}});
+  return {success:true};
 }
 
 function isTransferCodeValid(value) {
@@ -702,7 +761,8 @@ app.get("/api/me", requireAuth, async (req, res) => {
           lastname: profileObj.lastname || dbData.lastname || "",
           profilePic: profileObj.profilePic || profileObj.photoURL || dbData.profilePic || dbData.photoURL || "",
           createdAt: dbData.createdAt || (req.user && req.user.createdAt) || null,
-          updatedAt: dbData.updatedAt || (req.user && req.user.updatedAt) || null
+          updatedAt: dbData.updatedAt || (req.user && req.user.updatedAt) || null,
+          createdBy: dbData.createdBy || (req.user && req.user.createdBy) || ""
         });
         req.user = freshUser;
       }
@@ -785,6 +845,7 @@ app.get("/api/me", requireAuth, async (req, res) => {
     updatedAt: freshUser.updatedAt || null,
     pinVerified: isPinVerified(req),
     onboarding: onboardingInfo,
+    adminCreatedByEmail: String(freshUser.createdBy || "") || null,
     isAdminCreatedAccount: isAdminGeneratedAccount(freshUser)
   });
 });
@@ -2061,6 +2122,64 @@ app.get("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
   }
 });
 
+app.post("/api/admin/users/:uid/suspend", requireAdminAuth, async (req, res) => {
+  const uid = String(req.params?.uid || "").trim();
+  if (!uid) {
+    res.status(400).json({ error: "Missing user id." });
+    return;
+  }
+  try {
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get().catch(() => null);
+    let target = null;
+    if (userSnap && userSnap.exists) {
+      target = userSnap.data() || {};
+    } else {
+      const localUsers = readLocalUsers();
+      target = localUsers[uid] || null;
+    }
+    if (isAdminGeneratedAccount(target) && !(target.createdBy===req.admin.email || req.admin.email===process.env.ADMIN_EMAIL)) {
+      res.status(403).json({error:"Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."});
+      return;
+    }
+    await applyAccountStatusMutation(uid, "SUSPENDED", true, {by:req.admin.email, endpoint:"suspend"});
+    res.status(200).json({ ok: true });
+  } catch (e) {
+    const normalized = normalizeFirebaseAdminError(e, "Unable to suspend account.");
+    res.status(normalized.status).json({ error: normalized.error });
+  }
+});
+
+app.post("/api/admin/users/:uid/close", requireAdminAuth, async (req, res) => {
+  const uid = String(req.params?.uid || "").trim();
+  if (!uid) {
+    res.status(400).json({ error: "Missing user id." });
+    return;
+  }
+  try {
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get().catch(() => null);
+    let target = null;
+    if (userSnap && userSnap.exists) {
+      target = userSnap.data() || {};
+    } else {
+      const localUsers = readLocalUsers();
+      target = localUsers[uid] || null;
+    }
+    if (isAdminGeneratedAccount(target) && !(target.createdBy===req.admin.email || req.admin.email===process.env.ADMIN_EMAIL)) {
+      res.status(403).json({error:"Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."});
+      return;
+    }
+    await applyAccountStatusMutation(uid, "CLOSED", true, {by:req.admin.email, endpoint:"close"});
+    res.status(200).json({ ok: true });
+  } catch (e) {
+    const normalized = normalizeFirebaseAdminError(e, "Unable to close account.");
+    res.status(normalized.status).json({ error: normalized.error });
+  }
+});
+
 function generateStrongPassword() {
   const letters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   const numbers = "23456789";
@@ -2519,6 +2638,7 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
   const status = req.body?.status;
 
   let deltaInfo = null;
+  let pendingStatus = null;
 
   if (typeof req.body?.firstname !== "undefined" || typeof req.body?.lastname !== "undefined" ||
       typeof req.body?.email !== "undefined" || typeof req.body?.accountNumber !== "undefined" ||
@@ -2567,7 +2687,7 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       return;
     }
 
-    updates["account.status"] = normalizedStatus;
+    pendingStatus = normalizedStatus;
   }
 
   try {
@@ -2591,11 +2711,13 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
         const cur = localUsers[uid] || {};
         const curAccount = cur.account || {};
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
-        if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
         cur.updatedAt = new Date().toISOString();
         cur.account = curAccount;
         localUsers[uid] = cur;
         writeLocalUsers(localUsers);
+        if (pendingStatus) {
+          await applyAccountStatusMutation(uid, pendingStatus, true, {by:req.admin.email, endpoint:"patch-admin"});
+        }
         res.json({ ok: true, message: "Customer account updated (local-only record)." });
         return;
       }
@@ -2621,15 +2743,14 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       if (!firestoreUpdates.account) firestoreUpdates.account = {};
       firestoreUpdates.account.balance = updates["account.balance"];
     }
-    if (typeof updates["account.status"] !== "undefined") {
-      firestoreUpdates["account.status"] = updates["account.status"];
-      if (!firestoreUpdates.account) firestoreUpdates.account = {};
-      firestoreUpdates.account.status = updates["account.status"];
-    }
 
     await userRef.set(firestoreUpdates, {
       merge: true
     });
+
+    if (pendingStatus) {
+      await applyAccountStatusMutation(uid, pendingStatus, true, {by:req.admin.email, endpoint:"patch-admin"});
+    }
 
     /*
      * Keep the existing admin balance transaction behavior.
@@ -2671,7 +2792,6 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
         const cur = localUsers[uid] || {};
         const curAccount = cur.account || {};
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
-        if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
         cur.updatedAt = updates.updatedAt;
         cur.account = curAccount;
         localUsers[uid] = cur;
@@ -2689,11 +2809,13 @@ app.patch("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
         const cur = localUsers[uid] || {};
         const curAccount = cur.account || {};
         if (typeof updates["account.balance"] !== "undefined") curAccount.balance = updates["account.balance"];
-        if (typeof updates["account.status"] !== "undefined") curAccount.status = updates["account.status"];
         cur.updatedAt = new Date().toISOString();
         cur.account = curAccount;
         localUsers[uid] = cur;
         writeLocalUsers(localUsers);
+        if (pendingStatus) {
+          await applyAccountStatusMutation(uid, pendingStatus, true, {by:req.admin.email, endpoint:"patch-admin"});
+        }
         res.json({ ok: true, message: "Customer account updated locally (Firestore unavailable)." });
         return;
       }
@@ -2716,6 +2838,23 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
     });
     return;
   }
+
+  try {
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get().catch(() => null);
+    let target = null;
+    if (userSnap && userSnap.exists) {
+      target = userSnap.data() || {};
+    } else {
+      const localUsers = readLocalUsers();
+      target = localUsers[uid] || null;
+    }
+    if (isAdminGeneratedAccount(target) && !(target.createdBy===req.admin.email || req.admin.email===process.env.ADMIN_EMAIL)) {
+      res.status(403).json({error:"Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."});
+      return;
+    }
+  } catch (_) {}
 
   try {
     const db = getFirestore();
@@ -2771,6 +2910,7 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
           delete localTxs[uid];
           writeLocalTransactions(localTxs);
         }
+        appendAdminAudit({adminEmail:req.admin.email, action:"ACCOUNT_DELETE", targetUid:uid, details:{mode:"local-only"}});
         res.json({
           ok: true,
           message: "Customer account deleted (local-only record)."
@@ -2890,6 +3030,7 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
       }
     } catch (_) {}
 
+    appendAdminAudit({adminEmail:req.admin.email, action:"ACCOUNT_DELETE", targetUid:uid, details:{mode:"firestore"}});
     res.json({
       ok: true,
       message: "Customer account permanently deleted."
@@ -2912,6 +3053,7 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
           delete localTxs[uid];
           writeLocalTransactions(localTxs);
         }
+        appendAdminAudit({adminEmail:req.admin.email, action:"ACCOUNT_DELETE", targetUid:uid, details:{mode:"local-fallback"}});
         res.json({
           ok: true,
           message: "Customer account deleted locally (Firestore unavailable)."
@@ -2925,6 +3067,51 @@ app.delete("/api/admin/users/:uid", requireAdminAuth, async (req, res) => {
     res.status(500).json({
       error: "Unable to permanently delete customer account."
     });
+  }
+});
+
+app.delete("/api/admin/users/:uid/opening-balances/:txid", requireAdminAuth, async (req, res) => {
+  const uid = String(req.params?.uid || "").trim();
+  const txid = String(req.params?.txid || "").trim();
+  if (!uid || !txid) {
+    res.status(400).json({ error: "Missing user id or transaction id." });
+    return;
+  }
+  try {
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get().catch(() => null);
+    let target = null;
+    if (userSnap && userSnap.exists) {
+      target = userSnap.data() || {};
+    } else {
+      const localUsers = readLocalUsers();
+      target = localUsers[uid] || null;
+    }
+    if (isAdminGeneratedAccount(target) && !(target.createdBy===req.admin.email || req.admin.email===process.env.ADMIN_EMAIL)) {
+      res.status(403).json({error:"Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."});
+      return;
+    }
+    const userTxRef = db.collection("users").doc(uid).collection("transactions").doc(txid);
+    const globalTxRef = db.collection("transactions").doc(txid);
+    const userTxSnap = await userTxRef.get().catch(() => null);
+    const globalTxSnap = await globalTxRef.get().catch(() => null);
+    const userTx = userTxSnap && userTxSnap.exists ? userTxSnap.data() || {} : null;
+    const globalTx = globalTxSnap && globalTxSnap.exists ? globalTxSnap.data() || {} : null;
+    const isOpeningBalance = (userTx && String(userTx.type || "").toUpperCase() === "OPENING_BALANCE") || (globalTx && String(globalTx.type || "").toUpperCase() === "OPENING_BALANCE");
+    if (!isOpeningBalance) {
+      res.status(404).json({ error: "Opening balance transaction not found." });
+      return;
+    }
+    const batch = db.batch();
+    if (userTxSnap && userTxSnap.exists) batch.delete(userTxRef);
+    if (globalTxSnap && globalTxSnap.exists) batch.delete(globalTxRef);
+    await batch.commit();
+    appendAdminAudit({adminEmail:req.admin.email, action:"OPENING_BALANCE_DELETE", targetUid:uid, details:{txid}});
+    res.status(200).json({ ok: true });
+  } catch (e) {
+    const normalized = normalizeFirebaseAdminError(e, "Unable to delete opening balance.");
+    res.status(normalized.status).json({ error: normalized.error });
   }
 });
 

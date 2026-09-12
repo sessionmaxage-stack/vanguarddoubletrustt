@@ -3633,6 +3633,9 @@
     nd: { _name: "isiNdebele" }
   };
 
+  function escapeRegex(s){ return String(s||"").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
   const COUNTRY_LANGS = {
     AF: { primary: "fa", langs: ["fa", "ps", "uz", "tk", "en"] },
     AL: { primary: "sq", langs: ["sq", "en", "it", "el", "mk", "sr"] },
@@ -5789,6 +5792,13 @@
         vtBootBank();
       }
     }
+
+    Object.defineProperty(VT.I18N, "SUPPORTED_LANGS", {get: function(){ return ["en","es","fr","de","ar","zh-CN","pt-BR"]; }, configurable:true});
+    if (DICT.zh && !DICT["zh-CN"]) { DICT["zh-CN"] = DICT.zh; }
+    if (DICT.pt && !DICT["pt-BR"]) { DICT["pt-BR"] = DICT.pt; }
+    VT.I18N.setLang = function(langCode){ var lc = String(langCode||"").trim() || "en"; if (VT.I18N.SUPPORTED_LANGS.indexOf(lc) === -1) { lc = (DICT[lc] && lc) ? lc : "en"; } try { localStorage.setItem("vt.lang", lc); } catch(e){} try { document.documentElement.setAttribute("lang", lc); document.documentElement.setAttribute("dir", (lc==="ar")?"rtl":"ltr"); } catch(e){} try { window.__vtLang = lc; } catch(e){} VT.I18N.bootstrapLangElements(document); return lc; };
+    VT.I18N.getAppliedLang = function(){ var lc = null; try { lc = localStorage.getItem("vt.lang"); } catch(e){} if (!lc) try { lc = document.documentElement.getAttribute("lang"); } catch(e){} if (!lc && window.__ctx && window.__ctx.preferredLanguage) lc = window.__ctx.preferredLanguage; lc = String(lc||"en").trim(); return (DICT[lc]) ? lc : "en"; };
+    VT.I18N.bootstrapLangElements = function(root){ var r = (root && root.querySelectorAll) ? root : document; var nodes = r.querySelectorAll("[data-i18n]"); var L = VT.I18N.getAppliedLang(); for (var i=0;i<nodes.length;i++){ var n = nodes[i]; var k = n.getAttribute("data-i18n"); if (k) { var rawText = VT.I18N.t(L, k); if (n.getAttribute("data-i18n-unsafe") !== "1") rawText = escapeHtml(rawText); n.textContent = rawText; } } var placeholders = r.querySelectorAll("[data-i18n-placeholder]"); for (var j=0;j<placeholders.length;j++){ var pn = placeholders[j]; var pk = pn.getAttribute("data-i18n-placeholder"); if (pk) { var pv = VT.I18N.t(L, pk); pn.setAttribute("placeholder", pv); } } };
   }
 
   return exports;
