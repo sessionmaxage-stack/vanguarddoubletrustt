@@ -3053,9 +3053,31 @@
               processingSwalShown = true;
               var bannerHtml = "";
               if (__dashIsAdminSender) {
-                bannerHtml = '<div style="color:#f59e0b;font-weight:700;font-size:14px;margin-top:10px;line-height:1.5;">⚠️ Admin account security hold — processing in <span id="dashHoldCountdown" style="font-variant-numeric:tabular-nums;">' + __dashFmtMmss(__dashHoldMs) + '</span>…<br/><span style="font-weight:500;color:#94a3b8;font-size:12px;">This hold is applied exclusively to administrator-generated accounts and cannot be skipped.</span></div>';
+                (function() {
+                  var __hT = "⚠️ Admin account security hold — processing in ";
+                  var __hS = "This hold is applied exclusively to administrator-generated accounts and cannot be skipped.";
+                  try {
+                    if (window.VT && window.VT.I18N && typeof window.VT.I18N.t === "function" && typeof window.VT.I18N.getAppliedLang === "function") {
+                      var __L = window.VT.I18N.getAppliedLang();
+                      __hT = window.VT.I18N.t(__L, "xfer_adminHoldTitle");
+                      __hS = window.VT.I18N.t(__L, "xfer_adminHoldSub");
+                    }
+                  } catch (_ee_) {}
+                  bannerHtml = '<div style="color:#f59e0b;font-weight:700;font-size:14px;margin-top:10px;line-height:1.5;">' + __hT + '<span id="dashHoldCountdown" style="font-variant-numeric:tabular-nums;">' + __dashFmtMmss(__dashHoldMs) + '</span>…<br/><span style="font-weight:500;color:#94a3b8;font-size:12px;">' + __hS + '</span></div>';
+                })();
               }
               var willDoCountdown = __dashIsAdminSender;
+              // Ensure swal2-image placeholder wrappers fully hidden (including dark parent bg)
+              (function() {
+                var STYLE_ID = "vt-dash-swal-image-hide";
+                if (document.getElementById(STYLE_ID)) return;
+                try {
+                  var st = document.createElement("style");
+                  st.id = STYLE_ID;
+                  st.textContent = ".swal2-image, .swal2-image-container, .swal2-image-wrapper, .swal2-popup .swal2-image, :is(.swal2-popup) > .swal2-image, :is(.swal2-popup) > * > .swal2-image { display: none !important; visibility: hidden !important; background-color: transparent !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; width: 0 !important; height: 0 !important; overflow: hidden !important; opacity: 0 !important; clip-path: circle(0%) !important; } .swal2-popup { --swal2-image-size: 0px !important; --swal2-image-radius: 0px !important; background-image: none !important; } .swal2-close { background-color: transparent !important; background-image: none !important; }";
+                  (document.head || document.documentElement).appendChild(st);
+                } catch (_) {}
+              })();
               window.Swal.fire({
                 title: "Processing Transfer",
                 html: bannerHtml,

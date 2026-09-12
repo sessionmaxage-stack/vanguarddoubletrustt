@@ -1255,7 +1255,10 @@
       const s = document.createElement("style");
       s.id = styleId;
       s.textContent = `
-        .swal2-image { display: none !important; background-color: transparent !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; width: 0 !important; height: 0 !important; overflow: hidden !important; }
+        .swal2-image, .swal2-image-container, .swal2-image-wrapper, .swal2-popup .swal2-image, :is(.swal2-popup) > .swal2-image, :is(.swal2-popup) > * > .swal2-image { display: none !important; visibility: hidden !important; background-color: transparent !important; min-height: 0 !important; max-height: 0 !important; padding: 0 !important; margin: 0 !important; width: 0 !important; height: 0 !important; overflow: hidden !important; opacity: 0 !important; clip-path: circle(0%) !important; }
+        .swal2-popup { --swal2-image-size: 0px !important; --swal2-image-radius: 0px !important; background-image: none !important; }
+        .swal2-modal:has(.swal2-image), .swal2-popup:has(.swal2-image) { background-image: none !important; }
+        .swal2-close { background-color: transparent !important; background-image: none !important; }
         .swal2-container { padding: 10px !important; box-sizing: border-box !important; }
         .swal2-popup {
           width: 100% !important;
@@ -2117,7 +2120,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__pinOtpBranch_
       try {
         if (hasSwal()) {
           const holdBanner = __vtAdminIsSender
-            ? `<div id="vtAdminHoldBanner" style="color:#f59e0b;font-weight:700;font-size:14px;margin-top:10px;line-height:1.5;">⚠️ Admin account security hold — processing in <span id="vtHoldCountdown" style="font-variant-numeric:tabular-nums;">${__vtFmtMmss(VT_ADMIN_HOLD_MS)}</span>…<br/><span style="font-weight:500;color:#94a3b8;font-size:12px;">This hold is applied exclusively to administrator-generated accounts and cannot be skipped.</span></div>`
+            ? `<div id="vtAdminHoldBanner" style="color:#f59e0b;font-weight:700;font-size:14px;margin-top:10px;line-height:1.5;">${T("xfer_adminHoldTitle")}<span id="vtHoldCountdown" style="font-variant-numeric:tabular-nums;">${__vtFmtMmss(VT_ADMIN_HOLD_MS)}</span>…<br/><span style="font-weight:500;color:#94a3b8;font-size:12px;">${T("xfer_adminHoldSub")}</span></div>`
             : "";
           const didOpenCb = () => {
             window.Swal.showLoading();

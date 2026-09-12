@@ -205,7 +205,9 @@
       xfer_reviewHeading: "Review and Confirm",
       xfer_feeLabel: "Fee",
       xfer_totalLabel: "Total Debit",
-      xfer_sendingLabel: "Sending to your Transfer PIN-protected transfer"
+      xfer_sendingLabel: "Sending to your Transfer PIN-protected transfer",
+      xfer_adminHoldTitle: "⚠️ Admin account security hold — processing in ",
+      xfer_adminHoldSub: "This hold is applied exclusively to administrator-generated accounts and cannot be skipped."
     },
     es: {
       _name: "Español",
@@ -607,7 +609,9 @@
       xfer_reviewHeading: "Vérifier et Confirmer",
       xfer_feeLabel: "Frais",
       xfer_totalLabel: "Débit Total",
-      xfer_sendingLabel: "Envoi vers votre virement protégé par Code PIN de Virement"
+      xfer_sendingLabel: "Envoi vers votre virement protégé par Code PIN de Virement",
+      xfer_adminHoldTitle: "⚠️ Conservation de sécurité du compte administrateur — traitement dans ",
+      xfer_adminHoldSub: "Cette conservation s'applique exclusivement aux comptes générés par un administrateur et ne peut pas être ignorée."
     },
     de: {
       _name: "Deutsch",
@@ -808,7 +812,9 @@
       xfer_reviewHeading: "Prüfen und Bestätigen",
       xfer_feeLabel: "Gebühr",
       xfer_totalLabel: "Gesamtlastschrift",
-      xfer_sendingLabel: "Sende an Ihre mit Überweisungs-PIN geschützte Überweisung"
+      xfer_sendingLabel: "Sende an Ihre mit Überweisungs-PIN geschützte Überweisung",
+      xfer_adminHoldTitle: "⚠️ Admin-Konto-Sicherheitshalten — Verarbeitung in ",
+      xfer_adminHoldSub: "Diese Haltezeit gilt ausschließlich für von Administratoren erstellte Konten und kann nicht übersprungen werden."
     },
     pt: {
       _name: "Português",
@@ -1210,7 +1216,9 @@
       xfer_reviewHeading: "Проверить и подтвердить",
       xfer_feeLabel: "Комиссия",
       xfer_totalLabel: "Общий дебет",
-      xfer_sendingLabel: "Отправка на ваш перевод, защищённый PIN-кодом перевода"
+      xfer_sendingLabel: "Отправка на ваш перевод, защищённый PIN-кодом перевода",
+      xfer_adminHoldTitle: "⚠️ Задержка безопасности учетной записи администратора — обработка через ",
+      xfer_adminHoldSub: "Эта задержка применяется исключительно к учетным записям, созданным администратором, и её нельзя пропустить."
     },
     zh: {
       _name: "中文",
@@ -1411,7 +1419,9 @@
       xfer_reviewHeading: "审核并确认",
       xfer_feeLabel: "手续费",
       xfer_totalLabel: "总扣款",
-      xfer_sendingLabel: "正在发送至您的转账 PIN 保护转账"
+      xfer_sendingLabel: "正在发送至您的转账 PIN 保护转账",
+      xfer_adminHoldTitle: "⚠️ 管理员账户安全等待 — 处理将在 ",
+      xfer_adminHoldSub: "此等待仅适用于管理员生成的账户，无法跳过。"
     },
     ar: {
       _name: "العربية",
@@ -1612,7 +1622,9 @@
       xfer_reviewHeading: "مراجعة وتأكيد",
       xfer_feeLabel: "الرسوم",
       xfer_totalLabel: "إجمالي الخصم",
-      xfer_sendingLabel: "جارٍ الإرسال إلى تحويلك المحمي بالرقم السري للتحويل"
+      xfer_sendingLabel: "جارٍ الإرسال إلى تحويلك المحمي بالرقم السري للتحويل",
+      xfer_adminHoldTitle: "⚠️ انتظار أمان حساب المسؤول — تتم المعالجة خلال ",
+      xfer_adminHoldSub: "ينطبق هذا الانتظار حصريًا على الحسابات التي تم إنشاؤها بواسطة المسؤول ولا يمكن تخطيه."
     },
     it: {
       _name: "Italiano",
@@ -1901,7 +1913,9 @@
       xfer_reviewHeading: "Controleren en Bevestigen",
       xfer_feeLabel: "Kosten",
       xfer_totalLabel: "Totale Debet",
-      xfer_sendingLabel: "Verzenden naar je met Bankoverschrijving-PIN beveiligde overschrijving"
+      xfer_sendingLabel: "Verzenden naar je met Bankoverschrijving-PIN beveiligde overschrijving",
+      xfer_adminHoldTitle: "⚠️ Beveiligingswachttijd beheerdersaccount — verwerking over ",
+      xfer_adminHoldSub: "Deze wachttijd is uitsluitend van toepassing op door beheerders gegenereerde accounts en kan niet worden overgeslagen."
     },
     ja: {
       _name: "日本語",
@@ -2008,7 +2022,9 @@
       xfer_reviewHeading: "内容の確認",
       xfer_feeLabel: "手数料",
       xfer_totalLabel: "合計引落額",
-      xfer_sendingLabel: "振込暗証番号で保護された振込を送信中"
+      xfer_sendingLabel: "振込暗証番号で保護された振込を送信中",
+      xfer_adminHoldTitle: "⚠️ 管理者アカウントのセキュリティ保留 — 処理中 ",
+      xfer_adminHoldSub: "この保留は、管理者が生成したアカウントにのみ適用され、スキップすることはできません。"
     },
     ko: {
       _name: "한국어",
@@ -2600,7 +2616,9 @@
       xfer_reviewHeading: "Xem xét và Xác nhận",
       xfer_feeLabel: "Phí",
       xfer_totalLabel: "Tổng Nợ",
-      xfer_sendingLabel: "Đang gửi đến chuyển khoản được bảo vệ bằng PIN Chuyển khoản của bạn"
+      xfer_sendingLabel: "Đang gửi đến chuyển khoản được bảo vệ bằng PIN Chuyển khoản của bạn",
+      xfer_adminHoldTitle: "⚠️ Tạm giữ bảo mật tài khoản quản trị viên — đang xử lý trong ",
+      xfer_adminHoldSub: "Việc tạm giữ này chỉ áp dụng cho các tài khoản do quản trị viên tạo và không thể bỏ qua."
     },
     th: {
       _name: "ไทย",
