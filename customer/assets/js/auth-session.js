@@ -1419,11 +1419,10 @@
     if (hasSwal()) {
       const Swal = window.Swal;
       return await new Promise((resolve) => {
+        const L = (typeof window !== 'undefined' && window.__vtLang) || (window.__ctx && window.__ctx.preferredLanguage) || (typeof document !== 'undefined' && document.documentElement.getAttribute('lang')) || 'en';
+        const T = (k) => (typeof VT !== 'undefined' && VT.I18N ? VT.I18N.t(L, k) : k);
         let transferPin = "";
-        let otpSent = false;
-        let sentMaskedEmail = null;
-        let phase = "pin"; // pin -> otp -> confirm
-        let confirmedOtp = "";
+        let phase = "pin"; // pin -> confirm
         let resolved = false;
         let popupCloseGuardTimer = null;
 
@@ -1451,16 +1450,11 @@
         };
 
         const renderPinOtpBody = (opts = {}) => {
-          const sending = Boolean(opts.sending);
           const sendError = opts.sendError ? String(opts.sendError) : "";
-          const otpValue = opts.otpValue ? String(opts.otpValue) : "";
           return `
             <div class="vt-pin-otp-wrap">
               <div style="text-align:center; margin-bottom:18px; color:#475569; font-size:14px; line-height:1.6;">
-                Enter your <strong>Transfer PIN</strong> (Transaction Code) below and tap
-                <strong>Send Verification Code</strong>. A 6-digit OTP will be delivered exclusively to your admin-registered email address.
-                After receiving the code, enter it alongside your PIN and tap
-                <strong>Authorize Transfer</strong>.
+                ${T('xfer_proceedToConfirm')}
               </div>
 
               <div style="margin-bottom: 14px;">
@@ -1471,38 +1465,12 @@
                   id="vt-pin-input"
                   type="password"
                   autocomplete="off"
-                  placeholder="Enter your 6-digit or 8+ character Transfer PIN"
+                  placeholder="${T('xfer_pinPlaceholder')}"
                   value="${transferPin ? escapeHtml(transferPin) : ""}"
-                  ${otpSent ? " readonly disabled style=\"background:#f1f5f9;\"" : "style=\"text-align:center;letter-spacing:2px;font-size:18px;\""}
                   class="swal2-input"
-                  style="display:block; width:100%; height:46px; padding:8px 12px; box-sizing:border-box; text-align:center; letter-spacing:2px; font-size:18px; border:1px solid #cbd5e1; border-radius:10px; ${otpSent ? "background:#f1f5f9;" : ""}"
+                  style="display:block; width:100%; height:46px; padding:8px 12px; box-sizing:border-box; text-align:center; letter-spacing:2px; font-size:18px; border:1px solid #cbd5e1; border-radius:10px;"
                 />
               </div>
-
-              ${!otpSent ? "" : `
-                <div style="margin: 14px 0 10px; padding: 12px 14px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; color:#065f46; font-size:13px; line-height:1.6;">
-                  A verification code has been sent to your admin-registered email address:
-                  <strong style="display:inline-block; margin-left:4px;">${escapeHtml(sentMaskedEmail || "your registered email")}</strong>
-                  <small style="display:block; margin-top:4px; color:#047857;">Code valid for 15 minutes. Check your inbox (and spam folder).</small>
-                </div>
-                <div>
-                  <label for="vt-otp-input" style="display:block; text-align:left; font-size:12px; font-weight:700; color:#475569; letter-spacing:0.05em; text-transform:uppercase; margin-bottom:6px;">
-                    6-Digit Email Verification Code (OTP)
-                  </label>
-                  <input
-                    id="vt-otp-input"
-                    type="text"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
-                    maxlength="6"
-                    autocomplete="one-time-code"
-                    placeholder="• • • • • •"
-                    value="${escapeHtml(otpValue)}"
-                    class="swal2-input"
-                    style="display:block; width:100%; height:54px; padding:8px 12px; box-sizing:border-box; text-align:center; letter-spacing:12px; font-size:28px; font-weight:900; border:1px solid #cbd5e1; border-radius:10px;"
-                  />
-                </div>
-              `}
 
               ${sendError ? `
                 <div style="margin-top:12px; padding:10px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; font-size:13px; line-height:1.5; text-align:left;">
@@ -1523,14 +1491,14 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__renderConfirm
               <div style="margin-bottom:18px; padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; color:#1e40af; font-size:13px; line-height:1.6;">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
                   <i class="fas fa-shield-alt" style="color:#2563eb; font-size:15px;"></i>
-                  <span style="font-weight:800; font-size:14px;">Transfer review required</span>
+                  <span style="font-weight:800; font-size:14px;">${T('xfer_reviewHeading')}</span>
                 </div>
-                <div style="margin-left:28px;">OTP verified successfully. Please carefully review the transfer details below and click <strong>Confirm Transfer</strong> to finalize the disbursement. All displayed values are integrity-sealed against tampering.</div>
+                <div style="margin-left:28px;">${T('xfer_pinVerified')}</div>
               </div>
 
               <div style="border:1px solid rgba(148,163,184,0.18); border-radius:12px; overflow:hidden; background:rgba(15,23,42,0.04); margin-bottom:14px;">
                 <div style="padding:14px 16px; border-bottom:1px solid rgba(148,163,184,0.14); background:rgba(15,23,42,0.06);">
-                  <div style="font-size:11px; font-weight:800; color:#475569; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px;">Recipient Information</div>
+                  <div style="font-size:11px; font-weight:800; color:#475569; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px;">${T('xfer_recipientLabel')}</div>
                   <div style="margin-bottom:10px;">
                     <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">Full Name (Account Holder)</label>
                     <input
@@ -1560,7 +1528,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__renderConfirm
                 </div>
 
                 <div style="padding:14px 16px; border-bottom:1px solid rgba(148,163,184,0.14);">
-                  <div style="font-size:11px; font-weight:800; color:#475569; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px;">Transfer Breakdown</div>
+                  <div style="font-size:11px; font-weight:800; color:#475569; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px;">${T('xfer_amountLabel')}</div>
                   <div style="margin-bottom:10px;">
                     <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">Transfer Amount</label>
                     <div style="display:flex; align-items:center; gap:8px;">
@@ -1587,7 +1555,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__renderConfirm
                     </div>
                   </div>
                   <div style="margin-bottom:10px;">
-                    <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">Transaction Fee</label>
+                    <label style="display:block; font-size:11px; font-weight:700; color:#64748b; margin-bottom:3px; letter-spacing:0.03em;">${T('xfer_feeLabel')}</label>
                     <div style="display:flex; align-items:center; gap:8px;">
                       <input
                         type="text"
@@ -1613,7 +1581,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__renderConfirm
                   </div>
                   <div style="padding:10px 12px; background:#0f172a; border-radius:8px;">
                     <div style="display:flex; align-items:center; justify-content:space-between;">
-                      <span style="font-size:12px; font-weight:700; color:#cbd5e1; letter-spacing:0.04em; text-transform:uppercase;">Total to disburse</span>
+                      <span style="font-size:12px; font-weight:700; color:#cbd5e1; letter-spacing:0.04em; text-transform:uppercase;">${T('xfer_totalLabel')}</span>
                       <span style="font-size:18px; font-weight:900; color:#ffffff;">${escapeHtml(displayCurrency)} ${escapeHtml(formattedTotal)}</span>
                     </div>
                   </div>
@@ -1631,7 +1599,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__renderConfirm
 
               <div style="font-size:11px; color:#64748b; text-align:center; line-height:1.5;">
                 <i class="fas fa-lock" style="color:#10b981;"></i>
-                Transfer parameters have been cryptographically sealed at OTP-validation time and cannot be altered on this page.
+                ${T('xfer_sealedNotice')}
               </div>
             </div>
           `;
@@ -1662,15 +1630,13 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegated
             (async () => {
               try {
                 if (phase === "pin") {
-                  if (!otpSent) await onSendOtp();
-                } else if (phase === "otp") {
-                  await onAuthorize();
+                  await onSendOtp();
                 } else if (phase === "confirm") {
                   await onConfirmFinal();
                 }
               } catch (dispatchErr) {
                 try {
-                  const errMsg = (dispatchErr && dispatchErr.message) ? dispatchErr.message : "Unexpected error during authorization. Please restart the transfer process.";
+                  const errMsg = (dispatchErr && dispatchErr.message) ? dispatchErr.message : T('xfer_errorOtpBlocked');
                   if (phase === "confirm") {
                     openConfirmOrPinOtp({ integrityError: errMsg });
                   } else {
@@ -1689,8 +1655,8 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegated
             (async () => {
               try {
                 if (phase === "confirm") {
-                  phase = "otp";
-                  openConfirmOrPinOtp({ focus: "vt-otp-input" });
+                  phase = "pin";
+                  openConfirmOrPinOtp({ focus: "vt-pin-input" });
                   return;
                 }
                 safeResolve(null);
@@ -1704,7 +1670,6 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegated
           const attachDirectButtonHandlers = () => {
             const confirmBtn = popupEl.querySelector(".swal2-confirm");
             const cancelBtn = popupEl.querySelector(".swal2-cancel");
-            const resendBtn = popupEl.querySelector("#vt-resend-btn");
 
             if (confirmBtn) {
               confirmBtn.addEventListener("click", handleConfirmClick, true);
@@ -1714,15 +1679,6 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegated
               cancelBtn.addEventListener("click", handleCancelClick, true);
               cancelBtn.onclick = handleCancelClick;
             }
-            if (resendBtn) {
-              resendBtn.addEventListener("click", (ev) => {
-                if (ev && ev.preventDefault) ev.preventDefault();
-                if (ev && ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-                if (ev && ev.stopPropagation) ev.stopPropagation();
-                (async () => { try { await onSendOtp(); } catch (_) {} })();
-                return false;
-              }, true);
-            }
           };
 
           attachDirectButtonHandlers();
@@ -1730,14 +1686,6 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegated
           popupEl.addEventListener("click", (ev) => {
             const confirmBtn = ev.target.closest && ev.target.closest(".swal2-confirm");
             const cancelBtn = ev.target.closest && ev.target.closest(".swal2-cancel");
-            const resendBtn = ev.target.closest && ev.target.closest("#vt-resend-btn");
-            if (resendBtn) {
-              ev.preventDefault();
-              ev.stopImmediatePropagation();
-              ev.stopPropagation();
-              (async () => { try { await onSendOtp(); } catch (_) {} })();
-              return;
-            }
             if (confirmBtn) {
               ev.preventDefault();
               ev.stopImmediatePropagation();
@@ -1762,9 +1710,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegated
               ev.stopImmediatePropagation();
               (async () => {
                 if (phase === "pin") {
-                  if (!otpSent) await onSendOtp();
-                } else if (phase === "otp") {
-                  await onAuthorize();
+                  await onSendOtp();
                 } else if (phase === "confirm") {
                   await onConfirmFinal();
                 }
@@ -1826,7 +1772,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__bindDelegated
 
         const openConfirmOrPinOtp = (extraOpts = {}) => {
 // #region debug-point B:open-entry
-try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__openConfirmOrPinOtp__entry",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,phase_value:String(phase),otpSent_flag:!!otpSent,integrityErr_present:!!(extraOpts&&extraOpts.integrityError),sendErr_present:!!(extraOpts&&extraOpts.sendError)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
+try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__openConfirmOrPinOtp__entry",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,phase_value:String(phase),integrityErr_present:!!(extraOpts&&extraOpts.integrityError),sendErr_present:!!(extraOpts&&extraOpts.sendError)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
 // #endregion
           if (phase === "confirm") {
 // #region debug-point B:open-confirmbranch
@@ -1834,11 +1780,11 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__openConfirmOr
 // #endregion
             const integrityErr = extraOpts.integrityError ? extraOpts.integrityError : "";
             Swal.fire({
-              title: "Confirm Transfer",
+              title: T('xfer_confirmTitle'),
               html: renderConfirmBody({ integrityError: integrityErr }),
               showCancelButton: true,
-              confirmButtonText: "Confirm Transfer",
-              cancelButtonText: "← Back to OTP",
+              confirmButtonText: T('xfer_confirmButton'),
+              cancelButtonText: T('xfer_backToPin'),
               showConfirmButton: true,
               showCloseButton: true,
               focusConfirm: true,
@@ -1879,15 +1825,14 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__confirmBranch
           }
 
           const sendError = extraOpts.sendError ? extraOpts.sendError : "";
-          const otpValue = extraOpts.otpValue ? extraOpts.otpValue : "";
-          const focus = extraOpts.focus || (otpSent ? "vt-otp-input" : "vt-pin-input");
+          const focus = extraOpts.focus || "vt-pin-input";
 
           Swal.fire({
-            title: otpSent ? "Authorize Transfer" : "Initiate Transfer Authorization",
-            html: renderPinOtpBody({ sending: false, sendError, otpValue }),
+            title: T('xfer_dialogTitle'),
+            html: renderPinOtpBody({ sendError }),
             showCancelButton: true,
-            confirmButtonText: otpSent ? "Authorize Transfer" : "Send Verification Code",
-            cancelButtonText: "Cancel",
+            confirmButtonText: T('xfer_proceedToConfirm'),
+            cancelButtonText: T('xfer_cancelButton'),
             showConfirmButton: true,
             showCloseButton: true,
             focusConfirm: false,
@@ -1922,133 +1867,24 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__pinOtpBranch_
           });
         };
 
-        const showSending = () => {
-          const popupEl = Swal.getPopup();
-          if (!popupEl) return;
-          bindDelegatedHandlers(popupEl);
-          const pinInput = popupEl.querySelector("#vt-pin-input");
-          const pinVal = pinInput ? String(pinInput.value || "").trim() : transferPin;
-          if (pinVal) transferPin = pinVal;
-          Swal.update({
-            html: renderPinOtpBody({ sending: true }),
-            title: "Sending Verification Code...",
-            confirmButtonText: "Please wait...",
-            showCloseButton: false,
-            allowOutsideClick: false
-          });
-          Swal.showLoading();
-        };
-
         const onSendOtp = async () => {
           try {
-          const popupEl = Swal.getPopup();
-          if (popupEl) {
-            const pinInput = popupEl.querySelector("#vt-pin-input");
-            transferPin = pinInput ? String(pinInput.value || "").trim() : "";
-          }
-          if (!transferPin || transferPin.length < 6) {
-            Swal.hideLoading();
-            openConfirmOrPinOtp({ sendError: "Transfer PIN must be at least 6 characters or digits." });
-            return;
-          }
-          showSending();
-          let resp, body;
-          try {
-            resp = await fetch("/api/customer/transfer/request-otp", {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json", Accept: "application/json" },
-              body: JSON.stringify({
-                toAccountNumber: toAccountNumber,
-                toEmail: toEmail,
-                amount: amount,
-                currency: currency,
-                memo: memo,
-                transferPin: transferPin,
-                transferCode: transferPin
-              })
-            });
-            try { body = await resp.json(); } catch (_) { body = {}; }
-            if (!resp.ok || !body.ok) {
-              const msg = body && body.error ? body.error : "Failed to send verification code. Please try again.";
-              otpSent = false;
-              sentMaskedEmail = null;
-              Swal.hideLoading();
-              openConfirmOrPinOtp({ sendError: msg });
+            const popupEl = Swal.getPopup();
+            if (popupEl) {
+              const pinInput = popupEl.querySelector("#vt-pin-input");
+              transferPin = pinInput ? String(pinInput.value || "").trim() : "";
+            }
+            if (!transferPin || transferPin.length < 6) {
+              openConfirmOrPinOtp({ sendError: T('xfer_pinRequired6d') });
               return;
             }
-            otpSent = true;
-            phase = "otp";
-            sentMaskedEmail = body.maskedEmail || "your admin-registered email address";
-            Swal.hideLoading();
+            phase = "confirm";
             openConfirmOrPinOtp();
-            setTimeout(() => {
-              try {
-                const resendSpan = document.createElement("div");
-                resendSpan.id = "vt-resend-wrap";
-                resendSpan.style.textAlign = "center";
-                resendSpan.style.margin = "14px 0 0";
-                resendSpan.innerHTML = `<a id="vt-resend-btn" href="javascript:void(0)" style="color:#475569;font-size:12px;text-decoration:underline;">Didn't get the email? Resend verification code</a>`;
-                const wrap = Swal.getHtmlContainer();
-                if (wrap) wrap.appendChild(resendSpan);
-                const rb = document.getElementById("vt-resend-btn");
-                if (rb) rb.onclick = async () => { try { await onSendOtp(); } catch (_) {} };
-              } catch (_) {}
-            }, 50);
-          } catch (err) {
-            otpSent = false;
-            phase = "pin";
-            sentMaskedEmail = null;
-            const msg = err && err.message ? err.message : "Network error while sending verification code.";
-            Swal.hideLoading();
-            openConfirmOrPinOtp({ sendError: msg });
-          }
           } catch (outerErr) {
             try {
-              otpSent = false;
               phase = "pin";
-              sentMaskedEmail = null;
-              const msg = (outerErr && outerErr.message) ? outerErr.message : "Unexpected error while sending verification code.";
-              try { Swal.hideLoading(); } catch (_) {}
+              const msg = (outerErr && outerErr.message) ? outerErr.message : T('xfer_errorOtpBlocked');
               openConfirmOrPinOtp({ sendError: msg });
-            } catch (_) {}
-          }
-        };
-
-        const onAuthorize = async () => {
-          try {
-// #region debug-point C:onAuth-entry
-try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__entry",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
-// #endregion
-          const popupEl = Swal.getPopup();
-          let otpVal = "";
-          if (popupEl) {
-            const otpInput = popupEl.querySelector("#vt-otp-input");
-            otpVal = otpInput ? String(otpInput.value || "").trim() : "";
-          }
-// #region debug-point C:onAuth-otpread
-try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__otpRead",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,otpVal:String(otpVal),otpVal_len:String(otpVal).length,regex_match:/^\d{6}$/.test(otpVal)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
-// #endregion
-          if (!/^\d{6}$/.test(otpVal)) {
-// #region debug-point C:onAuth-regexfail
-try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__regexFail",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
-// #endregion
-            openConfirmOrPinOtp({ otpValue: otpVal, sendError: "Please enter the 6 numeric digits of the email verification code." });
-            return;
-          }
-// #region debug-point C:onAuth-phaseset
-try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__phaseSetBeforeOpen",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,confirmedOtp:String(otpVal),about_to_set_phase_confirm:true});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
-// #endregion
-          confirmedOtp = otpVal;
-          phase = "confirm";
-// #region debug-point C:onAuth-preopenconfirm
-try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__preOpenConfirm",prev=JSON.parse(L.getItem(k)||"[]");prev.push({ts:t,phase_now:String(phase),confirmedOtp_ok:/^\d{6}$/.test(confirmedOtp)});L.setItem(k,JSON.stringify(prev.slice(-50)))}catch(_DBG__){}
-// #endregion
-          openConfirmOrPinOtp();
-          } catch (outerErr) {
-            try {
-              const msg = (outerErr && outerErr.message) ? outerErr.message : "Unexpected error during OTP verification.";
-              openConfirmOrPinOtp({ otpValue: confirmedOtp, sendError: msg });
             } catch (_) {}
           }
         };
@@ -2093,23 +1929,23 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
               };
 
               if (shownFullName !== String(toFullName || "")) {
-                openConfirmOrPinOtp({ integrityError: "Displayed recipient name does not match the originally submitted transfer parameters. Please restart the transfer process." });
+                openConfirmOrPinOtp({ integrityError: T('xfer_pinInvalid') });
                 return;
               }
               if (shownAcct !== String(toAccountNumber || "")) {
-                openConfirmOrPinOtp({ integrityError: "Displayed recipient account number was tampered with. Please restart the transfer process." });
+                openConfirmOrPinOtp({ integrityError: T('xfer_pinInvalid') });
                 return;
               }
               if (String(shownCur).toUpperCase() !== String(displayCurrency || "").toUpperCase()) {
-                openConfirmOrPinOtp({ integrityError: "Displayed currency type was altered. Please restart the transfer process." });
+                openConfirmOrPinOtp({ integrityError: T('xfer_pinInvalid') });
                 return;
               }
               if (!Number.isFinite(shownAmt) || !Number.isFinite(amount) || Math.abs(Number(shownAmt) - Number(amount)) > 0.001) {
-                openConfirmOrPinOtp({ integrityError: "Displayed transfer amount does not match the originally submitted value. Please restart the transfer process." });
+                openConfirmOrPinOtp({ integrityError: T('xfer_pinInvalid') });
                 return;
               }
               if (!Number.isFinite(shownFee) || Math.abs(Number(shownFee) - Number(feeAmount)) > 0.001) {
-                openConfirmOrPinOtp({ integrityError: "Displayed transaction fee was modified. Please restart the transfer process." });
+                openConfirmOrPinOtp({ integrityError: T('xfer_pinInvalid') });
                 return;
               }
 
@@ -2122,30 +1958,30 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
                 Number(feeAmount)
               ]);
               if (shownIntegrity !== expectedIntegrity) {
-                openConfirmOrPinOtp({ integrityError: "Integrity checksum mismatch. Transfer parameters have been tampered with. Please restart the transfer process." });
+                openConfirmOrPinOtp({ integrityError: T('xfer_pinInvalid') });
                 return;
               }
 
               if (!verifyTransferContextIntegrity(sealedCtx, normalizedDisplayed)) {
-                openConfirmOrPinOtp({ integrityError: "Sealed context integrity could not be verified. Please restart the transfer process." });
+                openConfirmOrPinOtp({ integrityError: T('xfer_pinInvalid') });
                 return;
               }
             } catch (integrityErr) {
-              openConfirmOrPinOtp({ integrityError: (integrityErr && integrityErr.message) ? integrityErr.message : "Security validation failed. Please restart the transfer process." });
+              openConfirmOrPinOtp({ integrityError: (integrityErr && integrityErr.message) ? integrityErr.message : T('xfer_errorOtpBlocked') });
               return;
             }
           }
 
-          if (!/^\d{6}$/.test(confirmedOtp)) {
-            phase = "otp";
-            openConfirmOrPinOtp({ sendError: "OTP must be re-entered. Please restart the authorization flow." });
+          if (!transferPin || typeof transferPin !== "string" || transferPin.length < 1) {
+            phase = "pin";
+            openConfirmOrPinOtp({ sendError: T('xfer_pinRequired6d') });
             return;
           }
 
-          safeResolve({ transferPin, otp: confirmedOtp });
+          safeResolve({ transferPin });
           } catch (outerErr) {
             try {
-              const msg = (outerErr && outerErr.message) ? outerErr.message : "Unexpected error during final confirmation.";
+              const msg = (outerErr && outerErr.message) ? outerErr.message : T('xfer_errorOtpBlocked');
               phase = "confirm";
               openConfirmOrPinOtp({ integrityError: msg });
             } catch (_) {}
@@ -2157,10 +1993,9 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
       });
     }
 
-    // Non-SweetAlert fallback: prompt twice (same order — PIN then OTP) since browsers
-    // cannot show combined PIN+OTP form with window.prompt alone.
+    // Non-SweetAlert fallback: prompt for Transfer PIN only (PIN-only auth).
     const pv1 = window.prompt(
-      "Enter your Transfer PIN (Transaction Code).\n\nAfter you tap OK, a 6-digit OTP will be emailed to your admin-registered email address.\n\nTransfer PIN:",
+      "Enter your Transfer PIN (Transaction Code) to authorize this transfer.\n\nTransfer PIN:",
       ""
     );
     if (pv1 === null) return null;
@@ -2169,55 +2004,17 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
       window.alert("Transfer PIN must be at least 6 characters. Transfer cancelled.");
       return null;
     }
-
-    // Dispatch OTP request with PIN
-    let resp, body;
-    try {
-      resp = await fetch("/api/customer/transfer/request-otp", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          toAccountNumber: toAccountNumber,
-          toEmail: toEmail,
-          amount: amount,
-          currency: currency,
-          memo: memo,
-          transferPin: pinVal,
-          transferCode: pinVal
-        })
-      });
-      try { body = await resp.json(); } catch (_) { body = {}; }
-      if (!resp.ok || !body.ok) {
-        window.alert((body && body.error) || "Failed to send verification code.");
-        return null;
-      }
-    } catch (err) {
-      window.alert((err && err.message) || "Network error.");
-      return null;
-    }
-    const maskedEmail = body.maskedEmail || "your admin-registered email";
-    const pv2 = window.prompt(
-      `A 6-digit verification code has been sent to ${maskedEmail}.\n\nValid for 15 minutes.\n\nEnter the 6-digit OTP:`,
-      ""
-    );
-    if (pv2 === null) return null;
-    const otpVal = String(pv2 || "").trim();
-    if (!/^\d{6}$/.test(otpVal)) {
-      window.alert("OTP must be exactly 6 digits. Transfer cancelled.");
-      return null;
-    }
-    return { transferPin: pinVal, otp: otpVal };
+    return { transferPin: pinVal };
   };
 
   const processTransfer = async (opts) => {
     try {
+      const L = (typeof window !== 'undefined' && window.__vtLang) || (window.__ctx && window.__ctx.preferredLanguage) || (typeof document !== 'undefined' && document.documentElement.getAttribute('lang')) || 'en';
+      const T = (k) => (typeof VT !== 'undefined' && VT.I18N ? VT.I18N.t(L, k) : k);
       const authBundle = (opts && opts.authBundle) || null;
       let transferPin = "";
-      let otp = "";
       if (authBundle && typeof authBundle === "object") {
         transferPin = String(authBundle.transferPin || "").trim();
-        otp = String(authBundle.otp || "").trim();
       } else {
         transferPin = String(opts && opts.transferPin || "").trim();
       }
@@ -2269,12 +2066,12 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
       }
 
       /*
-       * Show COMBINED Transfer PIN + OTP authorization dialog (single unified prompt
-       * with two auth phases inside one dialog: Send OTP (with PIN) → Enter OTP (same
-       * dialog) → Authorize. If processTransfer already has both (retries from caller)
-       * use the provided values.
+       * Show Transfer PIN authorization dialog (single unified prompt
+       * with two phases inside one dialog: PIN entry → Confirm review.
+       * If processTransfer already has transferPin (retries from caller)
+       * use the provided value.
        */
-      if (!transferPin || !otp) {
+      if (!transferPin) {
         const combined = await showCombinedPinAndOtpDialog({
           toAccountNumber: recipient.accountNumber || accountNumber,
           toEmail: recipient.email || "",
@@ -2290,16 +2087,15 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
           return;
         }
         transferPin = String(combined.transferPin || "").trim();
-        otp = String(combined.otp || "").trim();
-        if (!transferPin || !/^\d{6}$/.test(otp)) {
-          throw new Error("Transfer PIN and 6-digit OTP are both required. Please restart the transfer process.");
+        if (!transferPin) {
+          throw new Error("Transfer PIN is required. Please restart the transfer process.");
         }
       }
 
       if (hasSwal()) {
         window.Swal.fire({
-          title: "Processing transfer...",
-          text: "Verifying Transfer PIN + OTP and processing transfer...",
+          title: T('xfer_processing'),
+          text: "Verifying Transfer PIN and processing transfer...",
           allowOutsideClick: false,
           allowEscapeKey: false,
           showConfirmButton: false,
@@ -2310,8 +2106,7 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
       }
 
       /*
-       * The server verifies BOTH Transfer PIN (independent hash match — combined
-       * auth) and 6-digit encrypted OTP (15-minute TTL + context-bound) and
+       * The server verifies the Transfer PIN (independent hash match) and
        * atomically adjusts balances.
        */
       const response = await fetch("/api/customer/transfer", {
@@ -2328,7 +2123,6 @@ try { const L=window.localStorage,t=Date.now(),k="dbg_otp_confirm__onAuthorize__
           currency: recipient.currency || "USD",
           transferPin: transferPin,
           transferCode: transferPin,
-          otp: otp,
           memo: `Bank transfer to ${recipient.fullName || receiverName}`
         })
       });

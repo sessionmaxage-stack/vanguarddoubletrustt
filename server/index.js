@@ -16,15 +16,6 @@ const cloudinary = require("cloudinary").v2;
 
 const { getAuth, getFirestore, validateFirebaseConfig } = require("./firebase");
 const { getCookieName, getCookieOptions, getSessionExpiresInMs, requireAuth } = require("./auth");
-const {
-  generate6DigitOtp,
-  maskEmail,
-  encryptOtpRecord,
-  decryptAndVerifyOtp,
-  checkRateLimit,
-  sendTransferOtpEmail,
-  sendAccountCreatedOtpEmail
-} = require("./transferOtp");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -465,42 +456,6 @@ function isAdminGeneratedAccount(userDataOrUid) {
   if (userData._adminCreated === true) return true;
 
   return false;
-}
-
-const OTP_AUDIT_DIR = path.resolve(__dirname, "..", "logs", "email-audit");
-(function ensureOtpAuditDir() {
-  try {
-    if (!fs.existsSync(OTP_AUDIT_DIR)) fs.mkdirSync(OTP_AUDIT_DIR, { recursive: true });
-  } catch (_) {}
-})();
-
-function otpAuditLogFileFor(dateObj) {
-  const d = dateObj instanceof Date ? dateObj : new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return path.join(OTP_AUDIT_DIR, `otp-audit-${yyyy}-${mm}-${dd}.jsonl`);
-}
-
-function writeOtpAuditRecord(record) {
-  try {
-    const now = new Date();
-    const filePath = otpAuditLogFileFor(now);
-    const payload = {
-      otpId: record?.otpId || `OTP-${makeTxId().slice(0, 8).toUpperCase()}`,
-      runId: record?.runId || `RUN-${makeTxId().slice(0, 8).toUpperCase()}`,
-      engine: "VanguardDoubleTrust SecureOTP Dispatcher v1.0",
-      ...record,
-      _writtenAt: now.toISOString()
-    };
-    fs.appendFileSync(filePath, JSON.stringify(payload) + "\n", "utf8");
-    return true;
-  } catch (err) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[OTP Audit] append failed:", err && err.message ? err.message : err);
-    }
-    return false;
-  }
 }
 
 function isTransferCodeValid(value) {
@@ -1476,241 +1431,27 @@ app.get("/api/customer/lookup-account", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/customer/transfer/request-otp", requireAuth, requireKycAndProfilePic, async (req, res) => {
-  try {
-    const uid = req.user.uid;
-    const b = req.body || {};
-    const toAccountNumber = String(b.toAccountNumber || b.to || "").trim();
-    const toEmail = String(b.toEmail || "").trim().toLowerCase();
-    const amountRaw = b.amount;
-    const amount = Number(amountRaw);
-    const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
-    const memo = String(b.memo || b.note || b.reference || "").trim();
-    const transferPinCandidate = String(b.transferPin || b.transferCode || b.transactionPin || b.txPin || "").trim();
-
-    // 0. Validate Transfer PIN before proceeding (MANDATORY per PIN-OTP sequence)
-    if (!transferPinCandidate) {
-      res.status(400).json({ error: "Transfer PIN (Transaction Code) is required. Please enter your 6-digit Transfer PIN to initiate the transfer authorization." });
-      return;
-    }
-    if (!isTransferCodeValid(transferPinCandidate)) {
-      res.status(400).json({ error: "Invalid Transfer PIN format. Transfer PIN must be exactly 6 digits or a strong 8+ character code." });
-      return;
-    }
-
-    // 1. Trigger condition validation: must be an explicit money transfer initiation
-    if (!toAccountNumber && !toEmail) {
-      res.status(400).json({ error: "Recipient accountNumber or email is required to initiate a transfer." });
-      return;
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      res.status(400).json({ error: "Transfer amount must be a positive number." });
-      return;
-    }
-
-    const db = getFirestore();
-    const senderRef = db.collection("users").doc(String(uid));
-    const senderSnap = await senderRef.get();
-    if (!senderSnap.exists) {
-      res.status(404).json({ error: "Your account was not found." });
-      return;
-    }
-    const senderDoc = senderSnap.data() || {};
-    const senderAccount = senderDoc?.account || {};
-    const senderStatus = String(senderAccount?.status || "").toUpperCase();
-    if (senderStatus && senderStatus !== "ACTIVE") {
-      res.status(400).json({ error: `Your account status is ${senderStatus}. Transfers are not available.` });
-      return;
-    }
-
-    const security = senderDoc.security || {};
-    const storedTransferPinHash = security.transferPinHash || null;
-    if (!storedTransferPinHash) {
-      res.status(400).json({ error: "Transfer PIN is not configured for this account. Please contact an administrator." });
-      return;
-    }
-
-    const candidateHash = sha256Hex(transferPinCandidate);
-    if (String(candidateHash) !== String(storedTransferPinHash)) {
-      res.status(401).json({ error: "Invalid Transfer PIN. Please check your Transaction Code and try again." });
-      return;
-    }
-
-    const currentBalance = Number(senderAccount?.balance || 0);
-    if (currentBalance < amount) {
-      res.status(400).json({
-        error: `Insufficient balance. Available: ${senderAccount?.currency || "USD"} ${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
-      });
-      return;
-    }
-
-    // 2. Enforce 24-hour rate limiting
-    const rateLimitData = security.transferOtpRateLimit || {};
-    const rateCheck = checkRateLimit(rateLimitData);
-    if (!rateCheck.allowed) {
-      res.status(429).json({ error: rateCheck.error });
-      return;
-    }
-
-    // 3. Generate 6-digit cryptographically secure OTP and encrypt at rest (AES-256-GCM, 15-minute expiration)
-    const rawOtp = generate6DigitOtp();
-    const encryptedRecord = encryptOtpRecord(rawOtp, {
-      amount,
-      currency,
-      toAccountNumber,
-      toEmail,
-      memo
-    });
-
-    encryptedRecord.transferPinVerified = true;
-    encryptedRecord.transferPinVerifiedAt = Date.now();
-    encryptedRecord.transferContext = {
-      amount,
-      currency,
-      toAccountNumber,
-      toEmail,
-      memo
-    };
-
-    // 4. Temporarily store encrypted OTP and update 24-hour rate limit history
-    await senderRef.set(
-      {
-        security: {
-          ...security,
-          transferOtp: encryptedRecord,
-          transferOtpRateLimit: {
-            requests: rateCheck.requests
-          }
-        }
-      },
-      { merge: true }
-    );
-
-    // 5. Send OTP EXCLUSIVELY to the admin-embedded email address that was registered
-    //    at account-creation time via POST /api/admin/users. We deliberately do NOT fall
-    //    back to profile.email, Firebase auth email, or local mirror records because
-    //    only userDoc.email (top-level) is the permanent admin-embedded immutable address.
-    const adminEmbeddedEmail = String(senderDoc?.email || "").trim().toLowerCase();
-
-    if (!adminEmbeddedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmbeddedEmail)) {
-      writeOtpAuditRecord({
-        phase: "otp_email_send",
-        ok: false,
-        ts: new Date().toISOString(),
-        error: "Admin-embedded email address missing or invalid on user document. Admin-only email required for OTP delivery.",
-        uid,
-        candidateEmail: adminEmbeddedEmail,
-        docHasEmail: Boolean(senderDoc && senderDoc.email),
-        profileEmail: String(senderDoc?.profile?.email || "").toLowerCase() || null
-      });
-      res.status(400).json({
-        error:
-          "This account has no valid admin-embedded email address on file. Transfer OTP codes can only be delivered to the email address registered by an administrator at account creation. Please contact VanguardDoubleTrust support."
-      });
-      return;
-    }
-
-    // Optional: auto-heal profile.email IF it is missing but admin email is present.
-    // We never auto-heal in the reverse direction (profile.email must not overwrite
-    // the admin-embedded top-level email field) and we never write to top-level email.
-    if (adminEmbeddedEmail && !senderDoc.profile?.email) {
-      await senderRef.set(
-        { profile: { ...(senderDoc.profile || {}), email: adminEmbeddedEmail } },
-        { merge: true }
-      ).catch(() => {});
-    }
-
-    const senderName = `${String(senderDoc?.profile?.firstname || "").trim()} ${String(senderDoc?.profile?.lastname || "").trim()}`.trim() || adminEmbeddedEmail;
-    const otpAuditBase = {
-      otpId: `OTP-${makeTxId().slice(0, 8).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`,
-      runId: `RUN-${makeTxId().slice(0, 8).toUpperCase()}`,
-      otpGenerationTs: new Date(encryptedRecord.createdAt).toISOString(),
-      otpExpiresTs: new Date(encryptedRecord.expiresAt).toISOString(),
-      otpExpiresIso: new Date(encryptedRecord.expiresAt).toISOString(),
-      otpMinutesWindow: 15,
-      cryptoAlgorithm: "AES-256-GCM at rest, CSPRNG entropy via Node crypto.randomInt",
-      cryptoSource: "crypto.randomInt(100000,1000000)",
-      recipientSource: "admin-embedded-userDoc.email",
-      recipientImmutable: true
-    };
-    writeOtpAuditRecord({
-      ...otpAuditBase,
-      phase: "otp_generation",
-      ok: true,
-      ts: new Date().toISOString(),
-      otp: rawOtp,
-      recipient: adminEmbeddedEmail,
-      maskedRecipient: maskEmail(adminEmbeddedEmail)
-    });
-    const sendResult = await sendTransferOtpEmail(adminEmbeddedEmail, senderName, rawOtp, {
-      amount,
-      currency,
-      recipient: toAccountNumber || toEmail
-    });
-    writeOtpAuditRecord({
-      ...otpAuditBase,
-      phase: "otp_email_send",
-      ok: Boolean(sendResult.delivered),
-      ts: new Date().toISOString(),
-      completedAt: new Date().toISOString(),
-      recipient: adminEmbeddedEmail,
-      maskedRecipient: maskEmail(adminEmbeddedEmail),
-      recipientName: senderName,
-      subject: `[VanguardDoubleTrust] Your Transfer Verification Code: ${rawOtp}`,
-      subjectContainsOtp: true,
-      fromHeader: process.env.SMTP_FROM || process.env.MAIL_FROM || `"VanguardDoubleTrust Security" <${process.env.SMTP_USER || process.env.MAIL_USER || "security@vanguarddoubletrust.com"}>`,
-      replyToHeader: process.env.SMTP_USER || process.env.MAIL_USER || "",
-      messageId: sendResult.messageId || null,
-      smtpAccepted: sendResult.delivered ? [adminEmbeddedEmail] : [],
-      smtpRejected: [],
-      smtpPending: [],
-      smtpRawResponse: sendResult.delivered ? "250 2.0.0 OK (server/sendTransferOtpEmail resolved with admin-embedded email)" : "",
-      deliveryStatus: sendResult.delivered ? "delivered_smtp_accepted_admin_email" : "send_failed_admin_email",
-      finalDeliveryStatus: sendResult.delivered ? "delivered_smtp_accepted_admin_email" : "send_failed_admin_email",
-      otp: rawOtp,
-      otpGenerationTs: otpAuditBase.otpGenerationTs,
-      otpExpiresTs: otpAuditBase.otpExpiresTs,
-      otpExpiresIso: otpAuditBase.otpExpiresIso,
-      otpMinutesWindow: 15,
-      cryptoAlgorithm: otpAuditBase.cryptoAlgorithm,
-      cryptoSource: otpAuditBase.cryptoSource,
-      cryptoAttempts: 1,
-      htmlBodyLength: 0,
-      textBodyLength: 0,
-      htmlContainsNeverShareWarning: true,
-      htmlContainsCriticalWarning: true,
-      textContainsNeverShareWarning: true,
-      headersSet: ["X-Mailer", "X-VT-Service", "X-VT-Audit-Id", "X-VT-OTP-Expires", "X-VT-OTP-Window-Mins", "X-Priority", "X-Auto-Response-Suppress", "List-Unsubscribe"]
-    });
-
-    if (!sendResult.delivered) {
-      res.status(500).json({ error: "Verification code email delivery to your admin-registered email address failed. Please verify your email configuration is active with the assigned administrator or contact support." });
-      return;
-    }
-
-    res.status(200).json({
-      ok: true,
-      message: sendResult.emailSent
-        ? "Transfer PIN verified. A 6-digit verification code has been sent exclusively to your admin-registered email address on file."
-        : "Transfer PIN verified. A 6-digit verification code has been dispatched to your admin-registered email address.",
-      maskedEmail: maskEmail(adminEmbeddedEmail),
-      emailDeliveredTo: "admin_embedded_email_only",
-      emailSent: Boolean(sendResult.emailSent),
-      emailDelivered: Boolean(sendResult.delivered),
-      expiresAt: encryptedRecord.expiresAt,
-      expiresInMinutes: 15,
-      transferPinVerified: true,
-      remainingDailyRequests: rateCheck.remaining
-    });
-  } catch (e) {
-    const normalized = normalizeFirebaseAdminError(e, "Unable to send verification code.");
-    res.status(normalized.status).json({ error: normalized.error });
-  }
-});
-
 app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (req, res) => {
   try {
   const b = req.body || {};
+
+  const OTP_FORBIDDEN_FIELDS = ["otp", "transferOtp", "verificationCode", "otpCode", "code", "twoFactorCode", "confirmCode", "secureCode", "authCode"];
+  const forbiddenField = OTP_FORBIDDEN_FIELDS.find((fname) => {
+    const raw = b[fname];
+    if (raw == null) return false;
+    const s = String(raw).trim();
+    if (!s) return false;
+    if (fname === "code") {
+      const transferPinRaw = String(b.transferPin || b.transferCode || "").trim();
+      if (transferPinRaw && s === transferPinRaw) return false;
+    }
+    return true;
+  });
+  if (forbiddenField) {
+    res.status(400).json({ ok: false, error: "OTP authentication is permanently disabled. Use your Transfer PIN exclusively." });
+    return;
+  }
+
   const uid = req.user.uid;
   const toAccountNumber = String(b.toAccountNumber || b.to || "").trim();
   const toEmail = String(b.toEmail || "").trim().toLowerCase();
@@ -1718,7 +1459,6 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const amount = Number(amountRaw);
   const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
   const memo = String(b.memo || b.note || b.reference || "").trim();
-  const candidateOtp = String(b.otp || b.transferOtp || b.code || "").trim();
   const transferPinCandidate = String(b.transferPin || b.transferCode || b.transactionPin || b.txPin || "").trim();
 
   if (!toAccountNumber && !toEmail) {
@@ -1729,12 +1469,8 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
     res.status(400).json({ error: "Amount must be a positive number." });
     return;
   }
-  if (!candidateOtp) {
-    res.status(400).json({ error: "6-digit email verification code (OTP) is required." });
-    return;
-  }
   if (!transferPinCandidate) {
-    res.status(400).json({ error: "Transfer PIN (Transaction Code) is required alongside the OTP to authorize this transfer." });
+    res.status(400).json({ error: "Transfer PIN (Transaction Code) is required to authorize this transfer." });
     return;
   }
   if (!isTransferCodeValid(transferPinCandidate)) {
@@ -1752,9 +1488,7 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const senderDoc = senderSnap.data() || {};
   const security = senderDoc.security || {};
 
-  // COMBINED VALIDATION (SIMULTANEOUS PIN + OTP):
-  // Verify the provided Transfer PIN matches the account stored hash FIRST and independently
-  // (combined auth requirement — do not rely on the OTP record's sequence flag alone).
+  // Validate Transfer PIN independently against the account stored hash.
   const storedTransferPinHash = security.transferPinHash || null;
   if (!storedTransferPinHash) {
     res.status(400).json({ error: "Transfer PIN is not configured for this account. Please contact an administrator." });
@@ -1762,49 +1496,7 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   }
   const pinCandidateHash = sha256Hex(transferPinCandidate);
   if (String(pinCandidateHash) !== String(storedTransferPinHash)) {
-    res.status(401).json({ error: "Invalid Transfer PIN. Please re-enter your Transaction Code alongside the email OTP." });
-    return;
-  }
-
-  // Two-step OTP verification: Exact decrypted match check + 15-minute expiration check
-  const storedOtpRecord = senderDoc?.security?.transferOtp;
-  const otpValidation = decryptAndVerifyOtp(storedOtpRecord, candidateOtp);
-  if (!otpValidation.valid) {
-    res.status(401).json({ error: otpValidation.error });
-    return;
-  }
-
-  // PIN-OTP SEQUENCE ENFORCEMENT: Ensure Transfer PIN was verified before this OTP was issued.
-  // (This is a belt-and-braces gate alongside the independent PIN hash match above.)
-  if (!storedOtpRecord || storedOtpRecord.transferPinVerified !== true) {
-    res.status(401).json({ error: "Transfer authorization is incomplete. You must first verify your Transfer PIN to generate a valid verification code. Please restart the transfer process and enter your Transfer PIN." });
-    return;
-  }
-
-  // TRANSFER CONTEXT BINDING: Ensure OTP is only used for THIS specific active transfer transaction
-  const storedContext = storedOtpRecord.transferContext || {};
-  const boundAmount = Number(storedContext.amount);
-  const boundCurrency = String(storedContext.currency || "USD").toUpperCase();
-  const boundToAccount = String(storedContext.toAccountNumber || "").trim();
-  const boundToEmail = String(storedContext.toEmail || "").trim().toLowerCase();
-
-  if (Number.isFinite(boundAmount) && boundAmount > 0) {
-    const amountDiff = Math.abs(Number(amount) - boundAmount);
-    if (amountDiff > 0.009) {
-      res.status(400).json({ error: "This verification code is bound to a different transfer amount. The OTP can only be used for the exact transaction it was generated for. Please restart the transfer process with your intended amount." });
-      return;
-    }
-  }
-  if (boundCurrency && currency !== boundCurrency) {
-    res.status(400).json({ error: "This verification code is bound to a different currency. Please restart the transfer process." });
-    return;
-  }
-  if (boundToAccount && toAccountNumber && toAccountNumber !== boundToAccount) {
-    res.status(400).json({ error: "This verification code is bound to a different recipient account. The OTP can only authorize the specific transfer it was generated for. Please restart the transfer." });
-    return;
-  }
-  if (boundToEmail && toEmail && toEmail !== boundToEmail) {
-    res.status(400).json({ error: "This verification code is bound to a different recipient. Please restart the transfer process." });
+    res.status(401).json({ error: "Invalid Transfer PIN. Please re-enter your Transaction Code." });
     return;
   }
 
@@ -1867,22 +1559,11 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const newRecipientBalance = Number((recBalance + amount).toFixed(2));
   const newRecipientAvailableBalance = Number((recAvailableBalance + amount).toFixed(2));
 
-  // Deduct balance + availableBalance and immediately invalidate/wipe OTP to prevent replay
   batch.set(senderRef, {
     updatedAt: nowIsoStamp,
     account: {
       balance: newSenderBalance,
       availableBalance: newSenderAvailableBalance
-    },
-    security: {
-      transferOtp: {
-        verified: true,
-        verifiedAt: Date.now(),
-        encryptedData: null,
-        iv: null,
-        authTag: null,
-        expiresAt: 0
-      }
     }
   }, { merge: true });
 
@@ -1955,6 +1636,24 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
 app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic, async (req, res) => {
   try {
   const b = req.body || {};
+
+  const OTP_FORBIDDEN_FIELDS_EXEC = ["otp", "transferOtp", "verificationCode", "otpCode", "code", "twoFactorCode", "confirmCode", "secureCode", "authCode"];
+  const forbiddenFieldExec = OTP_FORBIDDEN_FIELDS_EXEC.find((fname) => {
+    const raw = b[fname];
+    if (raw == null) return false;
+    const s = String(raw).trim();
+    if (!s) return false;
+    if (fname === "code") {
+      const tpRaw = String(b.transferPin || b.transferCode || "").trim();
+      if (tpRaw && s === tpRaw) return false;
+    }
+    return true;
+  });
+  if (forbiddenFieldExec) {
+    res.status(400).json({ ok: false, error: "OTP authentication is permanently disabled. Use your Transfer PIN exclusively." });
+    return;
+  }
+
   const uid = req.user.uid;
   const toAccountNumber = String(b.toAccountNumber || b.to || "").trim();
   const toEmail = String(b.toEmail || "").trim().toLowerCase();
@@ -1962,7 +1661,6 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
   const amount = Number(amountRaw);
   const currency = String(b.currency || "USD").trim().toUpperCase() || "USD";
   const memo = String(b.memo || b.note || b.reference || "").trim();
-  const candidateOtp = String(b.otp || b.otpCode || b.transferOtp || b.transferCode || b.code || "").trim();
   const transferPinCandidate = String(b.transferPin || b.transferCode || b.transactionPin || b.txPin || "").trim();
 
   if (!toAccountNumber && !toEmail) {
@@ -1971,10 +1669,6 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     res.status(400).json({ error: "Amount must be a positive number." });
-    return;
-  }
-  if (!candidateOtp) {
-    res.status(400).json({ error: "6-digit email verification code (OTP) is required." });
     return;
   }
   if (!transferPinCandidate) {
@@ -2003,44 +1697,6 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
   }
   if (!pinOk) {
     res.status(401).json({ error: "Invalid Transfer PIN. Transfer authorization failed." });
-    return;
-  }
-
-  const storedOtpRecord = senderDoc?.security?.transferOtp;
-  const otpValidation = decryptAndVerifyOtp(storedOtpRecord, candidateOtp);
-  if (!otpValidation.valid) {
-    res.status(401).json({ error: otpValidation.error });
-    return;
-  }
-
-  if (!storedOtpRecord || storedOtpRecord.transferPinVerified !== true) {
-    res.status(401).json({ error: "Transfer authorization is incomplete. You must first verify your Transfer PIN to generate a valid verification code. Please restart the transfer process and enter your Transfer PIN." });
-    return;
-  }
-
-  const storedContext = storedOtpRecord.transferContext || {};
-  const boundAmount = Number(storedContext.amount);
-  const boundCurrency = String(storedContext.currency || "USD").toUpperCase();
-  const boundToAccount = String(storedContext.toAccountNumber || "").trim();
-  const boundToEmail = String(storedContext.toEmail || "").trim().toLowerCase();
-
-  if (Number.isFinite(boundAmount) && boundAmount > 0) {
-    const amountDiff = Math.abs(Number(amount) - boundAmount);
-    if (amountDiff > 0.009) {
-      res.status(400).json({ error: "This verification code is bound to a different transfer amount. The OTP can only be used for the exact transaction it was generated for. Please restart the transfer process with your intended amount." });
-      return;
-    }
-  }
-  if (boundCurrency && currency !== boundCurrency) {
-    res.status(400).json({ error: "This verification code is bound to a different currency. Please restart the transfer process." });
-    return;
-  }
-  if (boundToAccount && toAccountNumber && toAccountNumber !== boundToAccount) {
-    res.status(400).json({ error: "This verification code is bound to a different recipient account. The OTP can only authorize the specific transfer it was generated for. Please restart the transfer." });
-    return;
-  }
-  if (boundToEmail && toEmail && toEmail !== boundToEmail) {
-    res.status(400).json({ error: "This verification code is bound to a different recipient. Please restart the transfer process." });
     return;
   }
 
@@ -2108,16 +1764,6 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
     account: {
       balance: newSenderBalance,
       availableBalance: newSenderAvailableBalance
-    },
-    security: {
-      transferOtp: {
-        verified: true,
-        verifiedAt: Date.now(),
-        encryptedData: null,
-        iv: null,
-        authTag: null,
-        expiresAt: 0
-      }
     }
   }, { merge: true });
 
@@ -2790,48 +2436,6 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
       writeLocalUsers(localUsers);
     } catch (_) {}
 
-    // Generate 6-digit account-creation OTP and email it to the user's admin-embedded email
-    const accountOtp = generate6DigitOtp();
-    const accountOtpEncrypted = encryptOtpRecord(accountOtp, {
-      purpose: "account_created",
-      email,
-      uid,
-      accountNumber
-    });
-
-    try {
-      const db = getFirestore();
-      await db.collection("users").doc(uid).set({
-        security: {
-          accountCreatedOtp: accountOtpEncrypted,
-          accountCreatedOtpSentAt: new Date().toISOString()
-        }
-      }, { merge: true }).catch(() => {});
-    } catch (_) {}
-    try {
-      const localUsers = readLocalUsers();
-      if (localUsers[uid]) {
-        if (!localUsers[uid].security) localUsers[uid].security = {};
-        localUsers[uid].security.accountCreatedOtp = accountOtpEncrypted;
-        localUsers[uid].security.accountCreatedOtpSentAt = new Date().toISOString();
-        writeLocalUsers(localUsers);
-      }
-    } catch (_) {}
-
-    let otpEmailResult = null;
-    try {
-      const fullName = `${firstname || ""} ${lastname || ""}`.trim() || email;
-      otpEmailResult = await sendAccountCreatedOtpEmail(email, fullName, accountOtp, {
-        email,
-        password,
-        accountNumber,
-        accountPin,
-        transferCode
-      });
-    } catch (otpErr) {
-      console.warn(`[Account OTP Delivery] Failed to dispatch account creation OTP to ${email}: ${otpErr?.message || otpErr}`);
-    }
-
     res.status(200).json({
       ok: true,
       user: {
@@ -2851,12 +2455,6 @@ app.post("/api/admin/users", requireAdminAuth, async (req, res) => {
         accountNumber,
         balance: startingBalance,
         currency: "USD"
-      },
-      accountOtp: {
-        sentTo: email,
-        maskedEmail: maskEmail(email),
-        emailSent: Boolean(otpEmailResult?.emailSent),
-        expiresAt: accountOtpEncrypted.expiresAt
       }
     });
   } catch (e) {

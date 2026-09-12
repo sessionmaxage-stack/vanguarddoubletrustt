@@ -2964,11 +2964,8 @@
         if (type === "accountNumber") requestBody.toAccountNumber = value;
         else requestBody.toEmail = value;
 
-        function doExecuteTransfer(otpCode) {
-          var bodyObj = Object.assign({}, requestBody, {
-            otp: otpCode,
-            transferCode: otpCode
-          });
+        function doExecuteTransfer(_ignoredOtp) {
+          var bodyObj = Object.assign({}, requestBody);
           var originalText = submitBtn ? submitBtn.textContent : "Send";
           if (submitBtn) submitBtn.textContent = "Sending…";
           fetchJson("/api/customer/transfer", {
@@ -3013,75 +3010,10 @@
         requestBody.transferPin = code;
         requestBody.transferCode = code;
 
-        var hasSwal = !!(window.Swal && typeof window.Swal.fire === "function");
-
-        fetchJson("/api/customer/transfer/request-otp", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(requestBody)
-        }).then(function(res) {
-          if (res && res.ok) {
-            var maskedEmail = String(res.maskedEmail || "your registered email").trim();
-            toast(res.message || "Verification code dispatched to " + maskedEmail + ".", "info");
-
-            if (hasSwal) {
-              window.Swal.fire({
-                title: "Email Verification Code",
-                html: 'A 6-digit One-Time Password (OTP) has been dispatched for <strong>' + maskedEmail + '</strong>.' +
-                  '<small class="text-muted" style="display:block;margin-top:8px;">Code expires in 15 minutes. Enter the 6-digit code below to authorize this transfer.</small>',
-                input: "text",
-                inputAttributes: {
-                  maxlength: "6",
-                  inputmode: "numeric",
-                  pattern: "[0-9]*",
-                  autocomplete: "one-time-code",
-                  autofocus: "autofocus",
-                  style: "text-align:center;letter-spacing:6px;font-size:24px;font-weight:bold;"
-                },
-                inputPlaceholder: "• • • • • •",
-                showCancelButton: true,
-                confirmButtonText: "Authorize Transfer",
-                cancelButtonText: "Cancel",
-                allowOutsideClick: false,
-                inputValidator: function(value) {
-                  var v = String(value || "").trim();
-                  if (!v) return "Please enter the 6-digit verification code.";
-                  if (!/^\d{6}$/.test(v)) return "The verification code must be exactly 6 numeric digits.";
-                  return undefined;
-                }
-              }).then(function(swalRes) {
-                if (!swalRes.isConfirmed) {
-                  if (submitBtn) submitBtn.disabled = false;
-                  return;
-                }
-                var enteredOtp = String(swalRes.value || "").trim();
-                if (codeInput) codeInput.value = enteredOtp;
-                doExecuteTransfer(enteredOtp);
-              });
-              return;
-            }
-
-            var promptMsg = "Enter the 6-digit verification code sent to " + maskedEmail + " (valid for 15 mins):";
-            var promptVal = window.prompt(promptMsg, "");
-            if (promptVal && /^\d{6}$/.test(String(promptVal).trim())) {
-              var entered = String(promptVal).trim();
-              if (codeInput) codeInput.value = entered;
-              doExecuteTransfer(entered);
-            } else {
-              if (submitBtn) submitBtn.disabled = false;
-            }
-          } else {
-            setTransferMsg("error", (res && res.error) ? String(res.error) : "Unable to generate verification code.");
-            toast((res && res.error) ? String(res.error) : "Unable to generate verification code.", "error");
-            if (submitBtn) submitBtn.disabled = false;
-          }
-        }).catch(function(err) {
-          setTransferMsg("error", err && err.message ? String(err.message) : "Failed to send verification code.");
-          toast(err && err.message ? String(err.message) : "Failed to send verification code.", "error");
-          if (submitBtn) submitBtn.disabled = false;
-        });
+        toast((window.VT && window.VT.I18N && typeof window.VT.I18N.t === "function") ?
+          window.VT.I18N.t("Transfer PIN verified. Processing transfer...") :
+          "Transfer PIN verified. Processing transfer...", "info");
+        doExecuteTransfer("");
       }
 
       function initTransferModal(ctx) {
@@ -3155,8 +3087,7 @@
             var me = (ctx && ctx.me) ? ctx.me : null;
 
             var info = me ?
-              applyUserInfoToDashboard(me) :
-              {
+              applyUserInfoToDashboard(me) : {
                 currency: "USD",
                 balance: 0
               };
