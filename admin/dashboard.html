@@ -225,60 +225,6 @@
         -webkit-overflow-scrolling: touch;
       }
 
-      @media (max-width: 1080px) {
-        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      }
-
-      @media (max-width: 960px) {
-        .grid { grid-template-columns: 1fr; }
-        .toolbar { flex-direction: column; align-items: stretch; }
-        .topbar { flex-direction: column; align-items: flex-start; }
-        .top-actions { width: 100%; justify-content: flex-start; }
-        .shell { padding: 18px; }
-        .card { overflow-x: hidden; }
-        table { min-width: 980px; }
-      }
-
-      @media (max-width: 720px) {
-        .shell { padding: 14px; }
-        .card { padding: 16px; border-radius: 18px; }
-        .btn, .btn-secondary {
-          padding: 11px 14px;
-          font-size: 13px;
-          border-radius: 12px;
-        }
-        .toolbar input {
-          width: 100%;
-          max-width: none;
-        }
-        .brand img { width: 160px; }
-        .metric {
-          font-size: 24px;
-          margin-top: 8px;
-          word-break: break-word;
-        }
-        #adminCreateModal {
-          padding: 10px;
-        }
-        #adminCreateModal .card {
-          margin: 0;
-          padding: 16px;
-          border-radius: 18px;
-        }
-        #adminCreateModal form,
-        #adminCreateModal .card > div[style*="grid-template-columns"] {
-          grid-template-columns: 1fr !important;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .shell { padding: 10px; }
-        .card { padding: 12px; border-radius: 16px; }
-        .brand img { width: 140px; }
-        .top-actions { flex-direction: column; align-items: stretch; }
-        .top-actions a, .top-actions button { width: 100%; text-align: center; }
-      }
-
       .review-link {
         cursor: pointer;
         color: #60a5fa;
@@ -410,21 +356,6 @@
         text-align: center;
       }
 
-      @media (max-width: 960px) {
-        .review-grid { grid-template-columns: 1fr; }
-        #adminReviewModal { padding: 10px; }
-        #adminReviewModal .review-shell { margin: 8px auto; }
-        .review-panel { padding: 14px; border-radius: 16px; }
-        .kv { flex-direction: column; align-items: flex-start; gap: 2px; }
-        .kv .v { text-align: left; }
-        .review-hero { flex-direction: column; align-items: stretch; }
-        .review-hero .actions { justify-content: flex-start; }
-      }
-      @media (max-width: 520px) {
-        .review-creds .creds-actions button,
-        .review-hero .actions button { width: 100%; }
-      }
-
     /* ===== FINAL ADMIN PALETTE CORRECTION ===== */
     :root {
         color-scheme: dark;
@@ -542,35 +473,299 @@
     * { border-color: rgba(255,255,255,0.10) !important; }
     html, body { background-color: #0a0f1a !important; color: #ffffff !important; }
 
-  @media (max-width: 1100px) {
-    #adminUsersTable td:nth-child(n+5), #adminUsersTable th:nth-child(n+5) { font-size: 12px; padding: 8px 6px; }
-    .vt-admin-shell { flex-direction: column; }
-  }
-  @media (max-width: 992px) {
-    .vt-admin-sidebar { width: 100%; height: auto; position: relative; padding: 14px; }
-    .vt-admin-main { padding: 0; }
-    .vt-admin-grid-main { grid-template-columns: 1fr; }
-    #adminCustomerReview { grid-template-columns: 1fr; }
-  }
-  @media (max-width: 720px) {
-    #adminUsersTable { font-size: 12px; }
-    #adminUsersTable thead { display: none; }
-    #adminUsersTable tr { display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 14px; padding: 10px; background: #fff; }
-    #adminUsersTable td { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; border: none; text-align: right; min-height: 36px; }
-    #adminUsersTable td::before { content: attr(data-label); font-weight: 800; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 38%; text-align: left; }
-    #adminUsersTable td[data-action-col]::before { display: none; }
-    #adminUsersTable td[data-action-col] { justify-content: stretch; width: 100%; }
-    #adminUsersTable td[data-action-col] > div { width: 100%; min-width: 0; }
-    #adminUsersTable td[data-action-col] button { width: 100%; }
-  }
-  @media (max-width: 480px) {
-    .vt-topbar { padding: 10px 12px; height: auto; gap: 8px; flex-wrap: wrap; }
-    .vt-topbar h1 { font-size: 16px; }
-    #adminSearchInput { min-height: 44px; min-width: 0; flex: 1; }
-    #adminUsersTable td { font-size: 11px; }
-  }
-  .vt-table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  @media (min-width: 768px) { .vt-table-scroll { overflow-x: visible; } }
+      /* ============= ADMIN RESPONSIVE — STANDARD BREAKPOINTS (360 / 768 / 1024 / 1280 / 1536) ============= */
+      :root { --bp-xs: 360px; --bp-sm: 768px; --bp-md: 1024px; --bp-lg: 1280px; --bp-xl: 1536px; }
+
+      /* ===== XL (≥1536px) — WIDE DESKTOPS ===== */
+      @media (min-width: 1536px) {
+        .shell { max-width: 1680px; padding: 34px 40px; }
+        .card { padding: 26px 28px; }
+        .metric { font-size: 38px; }
+        .brand img { width: 220px; }
+        th, td { padding: 16px 14px; font-size: 14px; }
+        .review-grid { gap: 18px; }
+      }
+
+      /* ===== LG (≤1280px) — LAPTOP / SMALL DESKTOP ===== */
+      @media (max-width: 1280px) {
+        .shell { max-width: 1200px; padding: 24px; }
+        .review-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
+
+      /* ===== MD (≤1024px) — TABLET (iPad vertical / Surface) ===== */
+      @media (max-width: 1024px) {
+        .shell { max-width: 980px; padding: 20px; }
+        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .toolbar { flex-direction: column; align-items: stretch; }
+        .topbar { flex-direction: column; align-items: flex-start; gap: 14px; }
+        .top-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+        .toolbar > div:last-child { justify-content: flex-start; }
+        .toolbar input#adminUserSearch { width: 100%; max-width: none; }
+        /* REVIEW — 2-column tablet layout */
+        .review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .review-txs, .review-creds { grid-column: 1 / -1; }
+        .review-hero { flex-direction: column; align-items: stretch; gap: 12px; }
+        .review-hero .actions { justify-content: flex-start; flex-wrap: wrap; }
+        /* CREATE MODAL — stay 2-col @ MD, inputs readable */
+        #adminCreateModal form > div[style*="grid-template-columns"],
+        #adminCreateModal [style*="grid-template-columns: repeat(2"] {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        input, select, textarea { min-height: 44px; font-size: 15px; }
+        .btn, .btn-secondary { min-height: 44px; touch-action: manipulation; }
+      }
+
+      /* ===== SM (≤768px) — MOBILE / iPad MINI horizontal ===== */
+      @media (max-width: 768px) {
+        .shell { padding: 16px 14px; }
+        .grid { grid-template-columns: 1fr; }
+        .card { padding: 18px 16px; border-radius: 18px; }
+        .card h3 { font-size: 16px; }
+        .metric { font-size: 28px; margin-top: 8px; word-break: break-word; }
+        .brand img { width: 160px; }
+        .brand small { font-size: 12px; }
+        .btn, .btn-secondary {
+          min-height: 44px;
+          padding: 11px 14px;
+          font-size: 14px;
+          border-radius: 12px;
+          width: 100%;
+          text-align: center;
+          touch-action: manipulation;
+        }
+        .top-actions { flex-direction: column; align-items: stretch; gap: 10px; }
+        .topbar { padding: 0; }
+        input, select, textarea {
+          min-height: 44px;
+          font-size: 16px;  /* prevents iOS zoom */
+          padding: 11px 14px;
+        }
+        table { min-width: 720px; }
+        .table-wrap, .vt-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        /* ===== USER LIST TABLE → CARD VIEW (DARK PALETTE, no #fff) ===== */
+        #adminUsersTable thead { display: none; }
+        #adminUsersTable,
+        #adminUsersTable tbody { display: block; width: 100%; min-width: 0; }
+        #adminUsersTable tr {
+          display: flex;
+          flex-direction: column;
+          border: 1px solid rgba(255,255,255,0.12) !important;
+          border-radius: 16px !important;
+          margin-bottom: 18px;
+          padding: 14px !important;
+          background: #121a2d !important;   /* DARK palette match */
+          background-color: #121a2d !important;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+        }
+        #adminUsersTable td {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 2px !important;
+          border: none !important;
+          border-bottom: 1px dashed rgba(255,255,255,0.08) !important;
+          text-align: right;
+          min-height: 44px;
+          width: 100%;
+          color: #ffffff;
+          font-size: 13px;
+          background: transparent !important;
+        }
+        #adminUsersTable td:last-child { border-bottom: none !important; }
+        #adminUsersTable td::before {
+          content: attr(data-label);
+          font-weight: 900;
+          color: #93c5fd;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+          flex: 0 0 38%;
+          text-align: left;
+          padding-right: 8px;
+        }
+        #adminUsersTable td input,
+        #adminUsersTable td select {
+          width: 62%;
+          max-width: 62%;
+          flex: 0 0 62%;
+          min-height: 42px;
+        }
+        #adminUsersTable td.status-cell select { min-width: 0; }
+        #adminUsersTable td[data-action-col]::before { display: none; }
+        #adminUsersTable td[data-action-col] {
+          justify-content: stretch;
+          width: 100%;
+          flex: 0 0 auto;
+          padding: 12px 0 4px 0 !important;
+          border-bottom: none !important;
+        }
+        #adminUsersTable td[data-action-col] > div {
+          width: 100%;
+          min-width: 0;
+          flex-direction: column;
+        }
+        #adminUsersTable td[data-action-col] button {
+          width: 100%;
+          min-height: 46px;
+          margin: 0;
+        }
+
+        /* ===== REVIEW PANELS — 1 COLUMN STACK ===== */
+        .review-grid { grid-template-columns: 1fr !important; gap: 12px; }
+        .review-panel { padding: 14px; border-radius: 14px; }
+        .review-panel h4 { font-size: 12px; letter-spacing: 0.07em; }
+        .kv {
+          flex-direction: column;
+          align-items: flex-start !important;
+          gap: 4px !important;
+          padding: 10px 0 !important;
+        }
+        .kv .k {
+          min-width: 0 !important;
+          width: 100%;
+          font-size: 11px !important;
+          letter-spacing: 0.05em;
+          font-weight: 900;
+          text-transform: uppercase;
+        }
+        .kv .v {
+          width: 100%;
+          text-align: left !important;
+          font-size: 13px !important;
+        }
+        .review-hero { padding: 0 0 8px; }
+        .review-hero .title h3 { font-size: 18px; word-break: break-word; }
+        .review-hero .actions button { width: 100%; min-height: 46px; }
+        .review-creds .creds-actions button { width: 100%; min-height: 46px; }
+        #adminReviewModal { padding: 10px 8px; }
+        #adminReviewModal .review-shell { margin: 8px auto 12px; max-width: 100%; }
+        .review-loading, .review-empty { padding: 20px 12px; }
+
+        /* ===== REVIEW TRANSACTIONS — CARD VIEW (table → cards) ===== */
+        .review-txs .txs-wrap table,
+        .review-txs .txs-wrap thead,
+        .review-txs .txs-wrap tbody,
+        .review-txs .txs-wrap tr,
+        .review-txs .txs-wrap td {
+          display: block; width: 100% !important; min-width: 0 !important;
+        }
+        .review-txs .txs-wrap thead { display: none !important; }
+        .review-txs .txs-wrap tr {
+          border: 1px solid rgba(255,255,255,0.10);
+          border-radius: 14px;
+          padding: 12px 14px;
+          margin-bottom: 12px;
+          background: #10172a;
+        }
+        .review-txs .txs-wrap td {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 6px 0 !important;
+          border: none;
+          border-bottom: 1px dashed rgba(255,255,255,0.08) !important;
+          min-height: 38px;
+          text-align: right;
+        }
+        .review-txs .txs-wrap td:last-child { border-bottom: none !important; }
+        .review-txs .txs-wrap td::before {
+          content: attr(data-label);
+          flex: 0 0 36%;
+          text-align: left;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #93c5fd;
+          padding-right: 8px;
+        }
+        /* REVIEW txs table → add data-label attrs fallback via nth-child */
+        .review-txs .txs-wrap td:nth-child(1)::before { content: "Date"; }
+        .review-txs .txs-wrap td:nth-child(2)::before { content: "Tx ID"; }
+        .review-txs .txs-wrap td:nth-child(3)::before { content: "Type"; }
+        .review-txs .txs-wrap td:nth-child(4)::before { content: "Note / Ref"; }
+        .review-txs .txs-wrap td:nth-child(5)::before { content: "Amount"; }
+        .review-txs .txs-wrap td:nth-child(6)::before { content: "Status"; }
+
+        /* ===== CREATE MODAL — 1 column, bigger inputs ===== */
+        #adminCreateModal {
+          padding: 10px 8px !important;
+        }
+        #adminCreateModal > .card {
+          margin: 0 auto;
+          padding: 16px !important;
+          border-radius: 16px !important;
+          max-width: 100% !important;
+        }
+        #adminCreateModal [style*="grid-template-columns"] {
+          grid-template-columns: 1fr !important;
+          gap: 10px !important;
+        }
+        #adminCreateModal label { font-size: 12px; }
+        #createProfilePicDropzone { padding: 16px 12px !important; }
+        #createProfilePicPreviewWrap {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 10px !important;
+          text-align: center;
+        }
+        #createProfilePicPreview { margin: 0 auto !important; }
+        #createProfilePicRemoveBtn { width: 100%; min-height: 42px; }
+        #adminCreateModal [style*="justify-content"] [style*="gap:12px"],
+        #adminCreateModal [style*="display:flex"][style*="gap:12px"]:last-of-type {
+          flex-direction: column-reverse;
+        }
+        #adminCreateModal > .card > div:last-of-type > button {
+          width: 100%;
+          min-height: 46px;
+        }
+        #adminCreateOutput {
+          min-height: 180px !important;
+          font-size: 12px;
+        }
+      }
+
+      /* ===== XS (≤360px) — SMALL MOBILE (Galaxy Fold etc) ===== */
+      @media (max-width: 360px) {
+        .shell { padding: 12px 10px; }
+        .card { padding: 14px 12px; border-radius: 16px; }
+        .metric { font-size: 24px; }
+        .brand img { width: 140px; }
+        h1, h2, h3, .card h3 { font-size: 15px !important; }
+        .btn, .btn-secondary {
+          font-size: 13px;
+          padding: 10px 12px;
+          min-height: 46px;
+          border-radius: 12px;
+        }
+        input, select, textarea { font-size: 16px; min-height: 46px; padding: 10px 12px; }
+        .review-panel { padding: 12px !important; }
+        .kv .k { font-size: 10px !important; }
+        .kv .v { font-size: 12px !important; word-break: break-word; }
+        .review-txs .txs-wrap td::before { flex: 0 0 42%; font-size: 10px !important; }
+        #adminUsersTable td::before { flex: 0 0 42%; font-size: 10px !important; }
+        .review-hero .title h3 { font-size: 16px !important; }
+        .swal2-popup,
+        #adminCreateModal .card,
+        #adminReviewModal .review-shell > .card {
+          max-width: 98vw !important;
+          border-radius: 14px !important;
+        }
+        .swal2-title { font-size: 18px !important; word-break: break-word; }
+      }
+
+      /* ===== Touch + global table-scroll fallback ===== */
+      .vt-table-scroll, .table-wrap, .txs-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      @media (min-width: 769px) { .vt-table-scroll, .table-wrap { overflow-x: visible; } }
+
+      /* ===== Prevent horizontal overflow globally ===== */
+      html, body, .shell, .card, .review-shell {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+      body { overflow-x: hidden; }
+      * { -webkit-tap-highlight-color: transparent; }
     </style>
   </head>
   <body>

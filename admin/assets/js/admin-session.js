@@ -165,13 +165,13 @@
 
     const accountActionsHtml = `
       <div style="display:flex;flex-direction:column;gap:8px;min-width:120px;margin:0 0 12px;">
-        <button type="button" data-action="suspend" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+        <button type="button" data-action="suspend" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:10px 12px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
           <i class="fas fa-pause" style="margin-right:6px;"></i>Suspend
         </button>
-        <button type="button" data-action="close" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+        <button type="button" data-action="close" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:10px 12px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
           <i class="fas fa-door-closed" style="margin-right:6px;"></i>Close
         </button>
-        <button type="button" data-action="delete" data-uid="${escapeHtml(u.uid)}" data-created="${escapeHtml(u.createdAt||'')}" data-status="${escapeHtml(u.status||acc.status||'')}" ${(canAct && canDelete) ? '' : 'disabled title="Delete requires account creator/owner ownership + account must be 30+ days old OR have status in [CLOSED,EXPIRED,SUSPENDED,BLOCKED]."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #dc2626;background:#fef2f2;color:#991b1b;cursor:pointer;${(canAct && canDelete)?'':'opacity:0.5;cursor:not-allowed;'}">
+        <button type="button" data-action="delete" data-uid="${escapeHtml(u.uid)}" data-created="${escapeHtml(u.createdAt||'')}" data-status="${escapeHtml(u.status||acc.status||'')}" ${(canAct && canDelete) ? '' : 'disabled title="Delete requires account creator/owner ownership + account must be 30+ days old OR have status in [CLOSED,EXPIRED,SUSPENDED,BLOCKED]."'} style="min-height:44px;padding:10px 12px;border-radius:10px;font-weight:800;border:1px solid #dc2626;background:#fef2f2;color:#991b1b;cursor:pointer;${(canAct && canDelete)?'':'opacity:0.5;cursor:not-allowed;'}">
           <i class="fas fa-trash-alt" style="margin-right:6px;"></i>Delete
         </button>
       </div>
@@ -254,7 +254,7 @@
             const amountText = signPrefix + money(signedAmt, t.currency || acc.currency || "USD");
             const isOpeningBal = String(t.type || "").toUpperCase() === "OPENING_BALANCE";
             const openingDelBtn = isOpeningBal
-              ? `<button type="button" data-action="delete-opening-tx" data-txid="${escapeHtml(t.id)}" ${canAct ? '' : 'disabled'} style="min-height:30px;padding:4px 8px;border-radius:8px;font-size:12px;font-weight:800;border:1px solid #dc2626;background:#fff;color:#991b1b;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+              ? `<button type="button" data-action="delete-opening-tx" data-txid="${escapeHtml(t.id)}" ${canAct ? '' : 'disabled'} style="min-height:44px;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:800;border:1px solid #dc2626;background:#fff;color:#991b1b;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
                   🗑️ Delete
                 </button>`
               : "";
@@ -1179,13 +1179,13 @@
 
       <td data-action-col>
         <div style="display:flex;flex-direction:column;gap:8px;min-width:120px;">
-          <button type="button" data-action="suspend" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+          <button type="button" data-action="suspend" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:8px 12px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
             <i class="fas fa-pause" style="margin-right:6px;"></i>Suspend
           </button>
-          <button type="button" data-action="close" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+          <button type="button" data-action="close" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:8px 12px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
             <i class="fas fa-door-closed" style="margin-right:6px;"></i>Close
           </button>
-          <button type="button" data-action="delete" data-uid="${escapeHtml(user.uid)}" data-created="${escapeHtml(user.createdAt||'')}" data-status="${escapeHtml(user.status||'')}" ${(canAct && canDelete) ? '' : 'disabled title="Delete requires account creator/owner ownership + account must be 30+ days old OR have status in [CLOSED,EXPIRED,SUSPENDED,BLOCKED]."'} style="min-height:34px;padding:6px 10px;border-radius:10px;font-weight:800;border:1px solid #dc2626;background:#fef2f2;color:#991b1b;cursor:pointer;${(canAct && canDelete)?'':'opacity:0.5;cursor:not-allowed;'}">
+          <button type="button" data-action="delete" data-uid="${escapeHtml(user.uid)}" data-created="${escapeHtml(user.createdAt||'')}" data-status="${escapeHtml(user.status||'')}" ${(canAct && canDelete) ? '' : 'disabled title="Delete requires account creator/owner ownership + account must be 30+ days old OR have status in [CLOSED,EXPIRED,SUSPENDED,BLOCKED]."'} style="min-height:44px;padding:8px 12px;border-radius:10px;font-weight:800;border:1px solid #dc2626;background:#fef2f2;color:#991b1b;cursor:pointer;${(canAct && canDelete)?'':'opacity:0.5;cursor:not-allowed;'}">
             <i class="fas fa-trash-alt" style="margin-right:6px;"></i>Delete
           </button>
         </div>
