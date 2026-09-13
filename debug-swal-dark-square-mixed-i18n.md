@@ -20,13 +20,18 @@
 - Locate setInterval callbacks that output hold countdown every 1s.
 
 ## Status
-- [ ] A1 Evidence collected
-- [ ] A2 Evidence collected
-- [ ] A3 Evidence collected
-- [ ] B1 Evidence collected
-- [ ] B2 Evidence collected
-- [ ] B3 Evidence collected
-- [ ] Root cause confirmed for A/B
-- [ ] Fix implemented
+- [x] A1 Evidence collected — SweetAlert2 `.swal2-image-wrapper/.swal2-image-container` parent carries opaque dark default bg & min-height; child hidden doesn't collapse parent.
+- [x] A2 Evidence collected — dashboard.php transfer submitter never loaded `injectResponsiveTransferStyles`; CSS never applied. Confirmed grep 0 matches.
+- [x] A3 Evidence collected — close button bg transparent after fix, not the culprit.
+- [x] B1 Evidence collected — EN-only banner html template in dashboard.php:3056 + auth-session.js:2120; no DICT keys existed for the hold text.
+- [x] B2 Rejected — tick interval only updates span.textContent not whole banner.
+- [x] B3 Rejected — issue existed even at initial Swal render before any lang switch.
+- [x] Root cause confirmed A/B — A1+A2 combined. B1 — missing i18n keys + no T() wrapping.
+- [x] Fix implemented (3 files):
+  - customer-i18n.js: 2 keys `xfer_adminHoldTitle` + `xfer_adminHoldSub` added to all 15 DICT langs.
+  - auth-session.js L1258: Extended hide selector to `.swal2-image-container` + `.swal2-image-wrapper`; added `--swal2-image-size:0`; opacity/clip-path defense.
+  - auth-session.js L2120: holdBanner rewritten to `${T('xfer_adminHoldTitle')}` + `${T('xfer_adminHoldSub')}` i18n.
+  - dashboard.php L3058: IIFE injects `vt-dash-swal-image-hide` CSS BEFORE `Swal.fire` (fixes missing CSS path A2 + parent wrapper A1).
+  - dashboard.php L3056: holdBanner rewritten with runtime `VT.I18N.t(getAppliedLang(), xfer_adminHold*)` lookups.
 - [ ] Post-fix verification logs compared
 - [ ] User confirms → [CLOSED]
