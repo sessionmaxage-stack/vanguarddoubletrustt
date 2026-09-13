@@ -496,46 +496,124 @@
     }
     * { border-color: rgba(255,255,255,0.10) !important; }
     html, body { background: #0a0f1a; color: #ffffff; }
-    /* ============= GOOGLE TRANSLATE WIDGET — dark navbar integration ============= */
-    #google_translate_element { z-index: 10; }
+    /* ============= GOOGLE TRANSLATE WIDGET — WHITE theme navbar integration ============= */
+    #google_translate_element {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        min-height: 40px;
+    }
     #google_translate_element .goog-te-gadget {
         font-family: inherit !important;
         color: transparent !important;
         font-size: 0 !important;
+        background: transparent !important;
+        width: auto !important;
+        border: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     #google_translate_element .goog-te-gadget > span { display: none !important; }
     #google_translate_element select.goog-te-combo {
-        min-height: 38px;
-        max-height: 40px;
-        padding: 6px 30px 6px 12px !important;
-        background: #ffffff !important;
+        min-height: 40px;
+        max-height: 42px;
+        padding: 8px 40px 8px 14px !important;
+        background-color: #ffffff !important;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23004d9b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+        background-repeat: no-repeat !important;
+        background-position: right 10px center !important;
+        background-size: 16px 16px !important;
         color: #0b1220 !important;
-        border: 1px solid rgba(255,255,255,0.20) !important;
-        border-radius: 50px !important;
+        border: 1.5px solid #ffffff !important;
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 2px 10px rgba(0,0,0,0.12) !important;
+        border-radius: 999px !important;
         font-size: 13px !important;
-        font-weight: 600 !important;
+        line-height: 1.2 !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.01em !important;
         font-family: inherit !important;
         cursor: pointer !important;
-        appearance: auto !important;
-        -webkit-appearance: menulist !important;
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        -webkit-padding-end: 40px !important;
+        -webkit-padding-start: 14px !important;
+        -webkit-user-select: none;
         outline: none !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-        transition: all 0.2s ease;
+        transition: all 0.18s ease-in-out;
+        box-sizing: border-box;
     }
+    #google_translate_element select.goog-te-combo::-ms-expand { display: none !important; }
     #google_translate_element select.goog-te-combo:hover {
         border-color: #004d9b !important;
-        box-shadow: 0 4px 12px rgba(0, 77, 155, 0.35);
+        box-shadow: 0 0 0 1px rgba(0,77,155,0.18), 0 4px 14px rgba(0, 77, 155, 0.28) !important;
     }
+    #google_translate_element select.goog-te-combo:focus,
+    #google_translate_element select.goog-te-combo:focus-visible {
+        outline: none !important;
+        border-color: #004d9b !important;
+        box-shadow: 0 0 0 3px rgba(0,77,155,0.28), 0 4px 14px rgba(0, 77, 155, 0.22) !important;
+    }
+    /* force WHITE dropdown popup on dark OS / Safari */
+    #google_translate_element select.goog-te-combo option,
+    #google_translate_element select.goog-te-combo optgroup {
+        background-color: #ffffff !important;
+        color: #0b1220 !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        padding: 8px 12px !important;
+    }
+    #google_translate_element select.goog-te-combo option:checked,
+    #google_translate_element select.goog-te-combo option:selected {
+        background-color: #eaf2ff !important;
+        color: #004d9b !important;
+    }
+    /* kill Google top banner + page jump */
     .goog-te-banner-frame.skiptranslate,
     iframe.goog-te-banner-frame { display: none !important; }
     body { top: 0 !important; }
+    /* text highlight subtle */
     .goog-text-highlight {
-        background-color: rgba(255,255,0,0.20) !important;
+        background-color: rgba(255, 230, 0, 0.26) !important;
+        color: inherit !important;
         box-shadow: none !important;
+        -webkit-box-shadow: none !important;
     }
+    /* ---- Responsive breakpoints (keep navbar aligned across sizes) ---- */
+    /* Tablet: bootstrap lg collapse @ 991px — navbar links collapse, keep widget inline */
+    @media (max-width: 1024px) {
+        #google_translate_element { margin: 4px 0; min-height: 42px; }
+    }
+    @media (max-width: 991px) {
+        #google_translate_element { margin-right: 10px !important; }
+        #google_translate_element select.goog-te-combo { min-width: 148px; }
+    }
+    /* Mobile */
     @media (max-width: 520px) {
-        #google_translate_element { display: inline-flex !important; }
-        #google_translate_element select.goog-te-combo { min-width: 130px; max-width: 150px; padding: 6px 8px !important; font-size: 12px !important; }
+        #google_translate_element { width: auto; display: inline-flex !important; }
+        #google_translate_element select.goog-te-combo {
+            min-width: 132px;
+            max-width: 156px;
+            padding: 8px 34px 8px 12px !important;
+            background-position: right 8px center !important;
+            background-size: 14px 14px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            min-height: 42px !important;
+        }
+    }
+    /* tiny mobile */
+    @media (max-width: 360px) {
+        #google_translate_element { margin-right: 6px !important; }
+        #google_translate_element select.goog-te-combo {
+            min-width: 118px;
+            max-width: 128px;
+            padding: 8px 30px 8px 10px !important;
+            font-size: 11.5px !important;
+            background-position: right 6px center !important;
+            background-size: 12px 12px !important;
+        }
     }
     .skiptranslate.goog-te-banner { display:none !important; visibility:hidden !important; }
     </style>
