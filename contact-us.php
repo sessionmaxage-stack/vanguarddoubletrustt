@@ -500,6 +500,48 @@
     }
     * { border-color: rgba(255,255,255,0.10) !important; }
     html, body { background: #0a0f1a; color: #ffffff; }
+    /* ============= GOOGLE TRANSLATE WIDGET — dark navbar integration ============= */
+    #google_translate_element { z-index: 10; }
+    #google_translate_element .goog-te-gadget {
+        font-family: inherit !important;
+        color: transparent !important;
+        font-size: 0 !important;
+    }
+    #google_translate_element .goog-te-gadget > span { display: none !important; }
+    #google_translate_element select.goog-te-combo {
+        min-height: 38px;
+        max-height: 40px;
+        padding: 6px 30px 6px 12px !important;
+        background: #ffffff !important;
+        color: #0b1220 !important;
+        border: 1px solid rgba(255,255,255,0.20) !important;
+        border-radius: 50px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        font-family: inherit !important;
+        cursor: pointer !important;
+        appearance: auto !important;
+        -webkit-appearance: menulist !important;
+        outline: none !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        transition: all 0.2s ease;
+    }
+    #google_translate_element select.goog-te-combo:hover {
+        border-color: #004d9b !important;
+        box-shadow: 0 4px 12px rgba(0, 77, 155, 0.35);
+    }
+    .goog-te-banner-frame.skiptranslate,
+    iframe.goog-te-banner-frame { display: none !important; }
+    body { top: 0 !important; }
+    .goog-text-highlight {
+        background-color: rgba(255,255,0,0.20) !important;
+        box-shadow: none !important;
+    }
+    @media (max-width: 520px) {
+        #google_translate_element { display: inline-flex !important; }
+        #google_translate_element select.goog-te-combo { min-width: 130px; max-width: 150px; padding: 6px 8px !important; font-size: 12px !important; }
+    }
+    .skiptranslate.goog-te-banner { display:none !important; visibility:hidden !important; }
     </style>
 </head>
 
@@ -538,6 +580,7 @@
             </div>
 
             <div class="others-options style-two d-flex align-items-center">
+                <div id="google_translate_element" class="d-flex align-items-center me-lg-4 me-md-3 me-2" aria-label="Language selector"></div>
                 <div class="gap-40 d-flex">
                     <a href="customer/login.php.html" class="text-decoration-none text-white">Login</a>
                 </div>
@@ -863,6 +906,22 @@
                 }
             });
         });
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async defer></script>
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        if (typeof google !== 'undefined' && google.translate && google.translate.TranslateElement) {
+          new google.translate.TranslateElement(
+            {
+              pageLanguage: 'en',
+              autoDisplay: false,
+              includedLanguages: 'en,es,fr,de,ar,zh-CN,pt-BR,ja,ko,hi,tr,it,nl,ru,vi',
+              layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+            },
+            'google_translate_element'
+          );
+        }
+      }
     </script>
     </body>
 
