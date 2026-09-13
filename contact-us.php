@@ -392,8 +392,16 @@
     .bg-dark-div, .navbar, .footer-area, .pay-support-area, .countries-area,
     .page-banner-area, .services-area, #backtotop,
     .contact-us-area .bg-img {
-        background-color: #0a0f1a !important;
-        background: #0a0f1a !important;
+        background-color: #ffffff !important;
+        background: #ffffff !important;
+    }
+    /* White mode: crisp light 1px bottom border for navbar separation */
+    .navbar {
+        border-bottom: 1px solid #e5e7eb !important;
+        box-shadow: 0 1px 2px rgba(15,23,42,0.05) !important;
+    }
+    .footer-area {
+        border-top: 1px solid #e5e7eb !important;
     }
     .page-banner-area {
         background: linear-gradient(135deg, #0a0f1a 0%, #10172a 100%) !important;
@@ -412,9 +420,10 @@
     .contact-info-item, .contact-form-wrap,
     .contact-area,
     .mobile-navbar .offcanvas-body, .dropdown-menu {
-        background-color: #10172a !important;
-        background: #10172a !important;
-        border-color: rgba(255,255,255,0.10) !important;
+        background-color: #ffffff !important;
+        background: #ffffff !important;
+        color: #0b1220 !important;
+        border-color: rgba(15,23,42,0.12) !important;
     }
     .contact-info-item:hover {
         border-color: #e8c367 !important;
@@ -498,8 +507,66 @@
         color: #0a0f1a !important;
         box-shadow: 0 14px 32px -20px rgba(0,0,0,0.5) !important;
     }
-    * { border-color: rgba(255,255,255,0.10) !important; }
-    html, body { background: #0a0f1a; color: #ffffff; }
+    * { border-color: rgba(15,23,42,0.12) !important; }
+    html, body { background: #ffffff; color: #0b1220; }
+    body {
+        background-color: #ffffff !important;
+        color: #0b1220 !important;
+    }
+    .services-area, .contact-us-area, .transfer-money-form.bg-dark-div2,
+    .why-choose-area, .faq-section, .counter-area, .banner-area, .blog-section,
+    .team-section, .breadcrumb-area, .payment-getway-section {
+        background-color: #ffffff !important;
+        background: #ffffff !important;
+        color: #0b1220 !important;
+    }
+    .banner-area {
+        background-color: #f7f9ff !important;
+        background-image: none !important;
+        color: #0b1220 !important;
+    }
+    .navbar-light .navbar-nav .nav-link,
+    .navbar .navbar-nav .nav-link,
+    .navbar-area.style-two .navbar-nav .nav-link,
+    .footer-area h1,.footer-area h2,.footer-area h3,
+    .footer-area h4,.footer-area h5,.footer-area h6,
+    .footer-area p, .footer-area span,.footer-area li,
+    .footer-area a, .footer-area .copyright,
+    .countries-area h1,.countries-area h2,.countries-area h3,
+    .countries-area h4,.countries-area h5,.countries-area h6,
+    .countries-area p,.countries-area li {
+        color: #0b1220 !important;
+    }
+    .navbar-light .navbar-nav .nav-link:hover,
+    .navbar-light .navbar-nav .nav-link.active,
+    .navbar .navbar-nav .nav-link:hover,
+    .navbar .navbar-nav .nav-link.active,
+    .navbar-area.style-two .navbar-nav .nav-link:hover,
+    .navbar-area.style-two .navbar-nav .nav-link.active,
+    .footer-area a:hover {
+        color: #004d9b !important;
+    }
+    .banner-area .banner-content .banner-title,
+    .banner-area .banner-content p,
+    .banner-area .banner-content .banner-subtitle,
+    .banner-area .banner-content .banner-title span,
+    .banner-area .banner-content .subtitle,
+    .breadcrumb-area .title,
+    .breadcrumb-area li,
+    .breadcrumb-area a,
+    .banner-area .promo-label {
+        color: #0b1220 !important;
+    }
+    /* Keep any pre-existing gradient/text-shadow or text-shadow hero subtle adjust for light bg */
+    .banner-area .banner-content .banner-title,
+    .banner-area .banner-content .banner-title span {
+        text-shadow: none !important;
+        background-image: linear-gradient(90deg, #004d9b 0%, #111827 100%) !important;
+        -webkit-background-clip: text !important;
+        background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        color: transparent !important;
+    }
     /* ============= GOOGLE TRANSLATE WIDGET — WHITE theme navbar integration ============= */
     #google_translate_element {
         display: flex;
@@ -525,7 +592,7 @@
     #google_translate_element .goog-te-gadget font { display: none !important; color: transparent !important; font-size: 0 !important; }
     /* Fix double-widget edge definition: Google combobox 1px dark outer ring so white pill visible on dark navbar */
     #google_translate_element select.goog-te-combo {
-        box-shadow: 0 0 0 1px rgba(11,18,32,0.16), 0 2px 10px rgba(0,0,0,0.12) !important;
+        box-shadow: 0 0 0 1px rgba(15,23,42,0.14), 0 0 0 3px rgba(219,234,254,0.45), 0 2px 10px rgba(15,23,42,0.08) !important;
     }
     #google_translate_element select.goog-te-combo:hover {
         box-shadow: 0 0 0 1px rgba(0,77,155,0.24), 0 4px 14px rgba(0, 77, 155, 0.28) !important;
@@ -561,7 +628,7 @@
       #google_translate_element { min-width: 120px; }
       #google_translate_element .gt-fallback-btn { min-width: 118px; max-width: 132px; padding: 8px 34px 8px 12px; font-size: 12px; font-weight: 600; min-height: 42px; background-position: right 8px center; background-size: 14px 14px; }
       #google_translate_element select.goog-te-combo {
-        box-shadow: 0 0 0 1px rgba(11,18,32,0.18), 0 2px 8px rgba(0,0,0,0.14) !important;
+        box-shadow: 0 0 0 1px rgba(15,23,42,0.14), 0 0 0 3px rgba(219,234,254,0.45), 0 2px 10px rgba(15,23,42,0.08) !important;
       }
     }
     @media (max-width: 360px) {
@@ -1023,7 +1090,7 @@
         </div>
     </div>
 
-    <button type="button" id="backtotop" style="background-color: #0a0f1a !important; color: #e8c367 !important;">
+    <button type="button" id="backtotop" style="background-color: #ffffff !important; color: #004d9b !important; border: 1px solid #dbeafe !important; box-shadow: 0 4px 14px rgba(15,23,42,0.12) !important;">
         <i class="ti ti-arrow-narrow-up"></i>
     </button>
 
