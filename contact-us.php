@@ -510,6 +510,31 @@
         min-width: 138px;
         position: relative;
     }
+    /* ============== AUTO-HIDE FALLBACK PLACEHOLDER WHEN REAL GOOGLE WIDGET MOUNTS ============== */
+    /* Modern browsers with :has() — hide fallback as soon as .goog-te-gadget child appears */
+    #google_translate_element:has(> .goog-te-gadget) .gt-fallback-btn {
+        display: none !important;
+    }
+    #google_translate_element:has(iframe.goog-te-menu-frame) .gt-fallback-btn,
+    #google_translate_element:has(select.goog-te-combo) .gt-fallback-btn {
+        display: none !important;
+    }
+    /* Universal sibling selector fallback (works in older browsers) */
+    #google_translate_element > .goog-te-gadget + .gt-fallback-btn { display: none !important; }
+    /* Also hide Google's default empty/transparent gadget text span to prevent ghost padding */
+    #google_translate_element .goog-te-gadget font { display: none !important; color: transparent !important; font-size: 0 !important; }
+    /* Fix double-widget edge definition: Google combobox 1px dark outer ring so white pill visible on dark navbar */
+    #google_translate_element select.goog-te-combo {
+        box-shadow: 0 0 0 1px rgba(11,18,32,0.16), 0 2px 10px rgba(0,0,0,0.12) !important;
+    }
+    #google_translate_element select.goog-te-combo:hover {
+        box-shadow: 0 0 0 1px rgba(0,77,155,0.24), 0 4px 14px rgba(0, 77, 155, 0.28) !important;
+    }
+    #google_translate_element select.goog-te-combo:focus,
+    #google_translate_element select.goog-te-combo:focus-visible {
+        box-shadow: 0 0 0 3px rgba(0,77,155,0.30), 0 0 0 1px rgba(0,77,155,0.45) inset, 0 4px 14px rgba(0, 77, 155, 0.22) !important;
+    }
+    /* ============== END AUTO-HIDE FALLBACK ============== */
     #google_translate_element .gt-fallback-btn {
         min-height: 40px;
         max-height: 42px;
@@ -535,6 +560,9 @@
     @media (max-width: 520px) {
       #google_translate_element { min-width: 120px; }
       #google_translate_element .gt-fallback-btn { min-width: 118px; max-width: 132px; padding: 8px 34px 8px 12px; font-size: 12px; font-weight: 600; min-height: 42px; background-position: right 8px center; background-size: 14px 14px; }
+      #google_translate_element select.goog-te-combo {
+        box-shadow: 0 0 0 1px rgba(11,18,32,0.18), 0 2px 8px rgba(0,0,0,0.14) !important;
+      }
     }
     @media (max-width: 360px) {
       #google_translate_element { min-width: 106px; }
@@ -668,6 +696,28 @@
               },
               'google_translate_element'
             );
+              /* Hide the fallback pill immediately since real widget just mounted */
+              try {
+                var mountPoint = document.getElementById('google_translate_element');
+                if (mountPoint) {
+                  var fb = mountPoint.querySelector('.gt-fallback-btn');
+                  if (fb) { fb.style.display = 'none'; fb.style.visibility = 'hidden'; fb.setAttribute('aria-hidden','true'); }
+                  /* Also observe in case Google appends gadget child later after microtask yield */
+                  var gtObserver = new MutationObserver(function() {
+                    try {
+                      var real = mountPoint.querySelector('.goog-te-gadget, select.goog-te-combo, iframe.goog-te-menu-frame');
+                      if (real) {
+                        var f = mountPoint.querySelector('.gt-fallback-btn');
+                        if (f) { f.style.display = 'none'; f.style.visibility = 'hidden'; f.setAttribute('aria-hidden','true'); }
+                        gtObserver.disconnect();
+                      }
+                    } catch(eo){}
+                  });
+                  gtObserver.observe(mountPoint, { childList: true, subtree: true, attributes: true });
+                  /* safety disconnect after 2s regardless */
+                  setTimeout(function(){ try { gtObserver.disconnect(); var f2 = mountPoint.querySelector('.gt-fallback-btn'); if (f2) { var hasGadget = mountPoint.querySelector('.goog-te-gadget'); if (hasGadget) { f2.style.display='none'; f2.style.visibility='hidden'; } } } catch(e) {} }, 2000);
+                }
+              } catch (ehide) {}
           } else {
             // google lib not ready yet — retry once in 150ms (handles slow/race async)
             setTimeout(function(){
@@ -677,6 +727,28 @@
                     {pageLanguage:'en', autoDisplay:false, includedLanguages:'en,es,fr,de,ar,zh-CN,pt-BR,ja,ko,hi,tr,it,nl,ru,vi', layout: (google.translate.TranslateElement.InlineLayout ? google.translate.TranslateElement.InlineLayout.SIMPLE : 0)},
                     'google_translate_element'
                   );
+              /* Hide the fallback pill immediately since real widget just mounted */
+              try {
+                var mountPoint = document.getElementById('google_translate_element');
+                if (mountPoint) {
+                  var fb = mountPoint.querySelector('.gt-fallback-btn');
+                  if (fb) { fb.style.display = 'none'; fb.style.visibility = 'hidden'; fb.setAttribute('aria-hidden','true'); }
+                  /* Also observe in case Google appends gadget child later after microtask yield */
+                  var gtObserver = new MutationObserver(function() {
+                    try {
+                      var real = mountPoint.querySelector('.goog-te-gadget, select.goog-te-combo, iframe.goog-te-menu-frame');
+                      if (real) {
+                        var f = mountPoint.querySelector('.gt-fallback-btn');
+                        if (f) { f.style.display = 'none'; f.style.visibility = 'hidden'; f.setAttribute('aria-hidden','true'); }
+                        gtObserver.disconnect();
+                      }
+                    } catch(eo){}
+                  });
+                  gtObserver.observe(mountPoint, { childList: true, subtree: true, attributes: true });
+                  /* safety disconnect after 2s regardless */
+                  setTimeout(function(){ try { gtObserver.disconnect(); var f2 = mountPoint.querySelector('.gt-fallback-btn'); if (f2) { var hasGadget = mountPoint.querySelector('.goog-te-gadget'); if (hasGadget) { f2.style.display='none'; f2.style.visibility='hidden'; } } } catch(e) {} }, 2000);
+                }
+              } catch (ehide) {}
                 }
               } catch(e2) {}
             }, 150);
