@@ -320,6 +320,37 @@ app.post("/api/sessionLogin", async (req, res) => {
     const uid = String(decoded.uid);
     const email = decoded.email || null;
 
+    /* ===== Block suspended/closed users from obtaining session cookie ===== */
+    let accountStatus = null;
+    try {
+      const db = getFirestore();
+      const snap = await db.collection("users").doc(uid).get().catch(() => null);
+      if (snap && snap.exists) {
+        const data = snap.data() || {};
+        accountStatus = String(((data && data.account) ? data.account.status : null) || data.status || "ACTIVE").toUpperCase();
+      }
+    } catch (_) { accountStatus = null; }
+    if (accountStatus && (accountStatus === "SUSPENDED" || accountStatus === "CLOSED" || accountStatus === "BLOCKED" || accountStatus === "EXPIRED")) {
+      let friendly = "This account has been restricted and cannot be accessed at this time. Please contact support for assistance.";
+      if (accountStatus === "SUSPENDED") friendly = "This account has been suspended by an administrator and cannot be logged in at this time. Please contact support.";
+      else if (accountStatus === "CLOSED") friendly = "This account has been closed and cannot be accessed. Please contact support if you believe this is in error.";
+      else if (accountStatus === "BLOCKED") friendly = "This account has been blocked by an administrator and cannot be logged in. Please contact support.";
+      res.status(403).json({
+        error: friendly,
+        accountStatus: accountStatus,
+        ok: false
+      });
+      try {
+        appendAdminAudit({
+          adminEmail: null,
+          action: `LOGIN_BLOCKED_${accountStatus}`,
+          targetUid: uid,
+          details: { email: email || null, at: new Date().toISOString(), reason: `account_status_${accountStatus.toLowerCase()}` }
+        });
+      } catch(_) {}
+      return;
+    }
+
     const expiresIn = getSessionExpiresInMs();
     const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
     res.cookie(getCookieName(), sessionCookie, { ...getCookieOptions(), maxAge: expiresIn });
@@ -2143,10 +2174,46 @@ app.post("/api/admin/users/:uid/suspend", requireAdminAuth, async (req, res) => 
       res.status(403).json({error:"Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."});
       return;
     }
-    await applyAccountStatusMutation(uid, "SUSPENDED", true, {by:req.admin.email, endpoint:"suspend"});
-    res.status(200).json({ ok: true });
+    const currentStatus = String((target && target.account ? target.account.status : null) || target.status || "ACTIVE").toUpperCase();
+    const requested = String(req.body?.targetStatus || req.body?.status || "").trim().toUpperCase();
+    let finalStatus = requested;
+    /* Auto-toggle if caller does not specify target status */
+    if (!finalStatus || finalStatus === "TOGGLE") {
+      finalStatus = (currentStatus === "SUSPENDED") ? "ACTIVE" : "SUSPENDED";
+    }
+    /* Only permit safe transitions to ACTIVE / SUSPENDED from this endpoint */
+    if (finalStatus !== "ACTIVE" && finalStatus !== "SUSPENDED") {
+      res.status(400).json({ error: `Invalid target status '${finalStatus}'. Only ACTIVE or SUSPENDED are permitted for the account suspend/restore endpoint.` });
+      return;
+    }
+    /* Refuse redundant transitions */
+    if (finalStatus === currentStatus) {
+      res.status(200).json({ ok: true, noop: true, previousStatus: currentStatus, appliedStatus: finalStatus });
+      return;
+    }
+    const actionLabel = (finalStatus === "SUSPENDED") ? "SUSPEND" : (finalStatus === "ACTIVE" ? "RESTORE_UNSUSPEND" : "STATUS_UPDATE");
+    const actionEndpoint = (finalStatus === "SUSPENDED") ? "suspend" : "restore";
+    await applyAccountStatusMutation(uid, finalStatus, true, {by:req.admin.email, endpoint:actionEndpoint, priorStatus:currentStatus});
+    try {
+      appendAdminAudit({
+        adminEmail: req.admin.email,
+        action: actionLabel,
+        targetUid: uid,
+        details: {
+          email: (target && target.email) ? String(target.email) : null,
+          fromStatus: currentStatus,
+          toStatus: finalStatus,
+          at: new Date().toISOString(),
+          requestedBy: req.admin.email
+        }
+      });
+    } catch(_) {}
+    res.status(200).json({ ok: true, previousStatus: currentStatus, appliedStatus: finalStatus, action: actionLabel });
   } catch (e) {
-    const normalized = normalizeFirebaseAdminError(e, "Unable to suspend account.");
+    const friendlyMsg = (String(req.body?.targetStatus || "").toUpperCase() === "ACTIVE")
+      ? "Unable to restore account."
+      : "Unable to suspend account.";
+    const normalized = normalizeFirebaseAdminError(e, friendlyMsg);
     res.status(normalized.status).json({ error: normalized.error });
   }
 });

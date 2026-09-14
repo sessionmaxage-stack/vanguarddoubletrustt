@@ -165,8 +165,8 @@
 
     const accountActionsHtml = `
       <div style="display:flex;flex-direction:column;gap:8px;min-width:120px;margin:0 0 12px;">
-        <button type="button" data-action="suspend" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:10px 12px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
-          <i class="fas fa-pause" style="margin-right:6px;"></i>Suspend
+        <button type="button" data-action="suspend" data-uid="${escapeHtml(u.uid)}" data-target-status="${String(acc.status||u.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'ACTIVE':'SUSPENDED'}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:10px 12px;border-radius:10px;font-weight:800;${String(acc.status||u.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'border:1px solid #10b981;background:#ecfdf5;color:#065f46;':'border:1px solid #f59e0b;background:#fffbeb;color:#92400e;'}cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+          <i class="fas ${String(acc.status||u.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'fa-play':'fa-pause'}" style="margin-right:6px;"></i>${String(acc.status||u.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'Unsuspend':'Suspend'}
         </button>
         <button type="button" data-action="close" data-uid="${escapeHtml(u.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:10px 12px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
           <i class="fas fa-door-closed" style="margin-right:6px;"></i>Close
@@ -349,6 +349,8 @@
           event.preventDefault();
           event.stopImmediatePropagation();
           const bUid = suspendBtn.getAttribute("data-uid") || uid;
+          const targetStatus = String(suspendBtn.getAttribute("data-target-status") || "SUSPENDED").toUpperCase();
+          const isUnsuspend = targetStatus === "ACTIVE";
           if (suspendBtn.disabled || suspendBtn.hasAttribute("disabled")) {
             try { Swal.fire({icon:'error', title:'Permission denied', text:suspendBtn.getAttribute("title") || 'Action not permitted.'}); } catch(e) {}
             return;
@@ -357,20 +359,31 @@
             try { Swal.fire({icon:'error', title:'Permission denied', text:'Only the admin who created this account (or account owner) can perform actions on admin-generated accounts.'}); } catch(e) {}
             return;
           }
-          try {
-            const r = await Swal.fire({title:'Suspend account?', text:'This user will be unable to transact.', icon:'warning', showCancelButton:true, confirmButtonText:'Suspend', cancelButtonText:'Cancel', confirmButtonColor:'#d97706'});
-            if (!r.isConfirmed) return;
-          } catch(e) {
-            if (!window.confirm("Suspend account? This user will be unable to transact.")) return;
+          let proceed = false;
+          if (typeof Swal !== 'undefined' && window.Swal && Swal.fire) {
+            const title = isUnsuspend ? 'Unsuspend (restore) account?' : 'Suspend account?';
+            const desc = isUnsuspend ? 'This user will be able to log in and transact again.' : 'This user will be unable to log in or transact.';
+            const confirmText = isUnsuspend ? 'Unsuspend' : 'Suspend';
+            const confirmColor = isUnsuspend ? '#059669' : '#d97706';
+            const ic = isUnsuspend ? 'success' : 'warning';
+            const r = await Swal.fire({title:title, text:desc, icon:ic, showCancelButton:true, confirmButtonText:confirmText, cancelButtonText:'Cancel', confirmButtonColor:confirmColor});
+            proceed = Boolean(r?.isConfirmed);
+          } else {
+            const q = isUnsuspend ? 'Unsuspend account? This user will be able to log in again.' : 'Suspend account? This user will be unable to log in or transact.';
+            if (!window.confirm(q)) return;
+            proceed = true;
           }
+          if (!proceed) return;
           suspendBtn.disabled = true;
           const oldT = suspendBtn.innerHTML;
-          suspendBtn.textContent = "Suspending…";
+          suspendBtn.textContent = isUnsuspend ? "Restoring…" : "Suspending…";
           try {
-            await api(`/api/admin/users/${encodeURIComponent(bUid)}/suspend`, { method: "POST" });
-            await loadCustomerReview(bUid);
+            await api(`/api/admin/users/${encodeURIComponent(bUid)}/suspend`, { method: "POST", body: JSON.stringify({ targetStatus }) });
+            try { if (typeof flash === "function") flash(isUnsuspend ? "Account restored successfully." : "Account suspended."); } catch(_) {}
+            try { loadUserList(); } catch(_) {}
+            try { refreshReview(); } catch(_) {}
           } catch (err) {
-            try { Swal.fire({icon:'error', title:'Failed', text: err?.message || 'Unable to suspend account.'}); } catch(e) {}
+            try { Swal.fire({icon:'error', title:'Failed', text: err?.message || (isUnsuspend ? 'Unable to restore account.' : 'Unable to suspend account.')}); } catch(e) {}
             suspendBtn.disabled = false;
             suspendBtn.innerHTML = oldT;
           }
@@ -1179,8 +1192,8 @@
 
       <td data-action-col>
         <div style="display:flex;flex-direction:column;gap:8px;min-width:120px;">
-          <button type="button" data-action="suspend" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:8px 12px;border-radius:10px;font-weight:800;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
-            <i class="fas fa-pause" style="margin-right:6px;"></i>Suspend
+          <button type="button" data-action="suspend" data-uid="${escapeHtml(user.uid)}" data-target-status="${String(user.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'ACTIVE':'SUSPENDED'}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:8px 12px;border-radius:10px;font-weight:800;${String(user.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'border:1px solid #10b981;background:#ecfdf5;color:#065f46;':'border:1px solid #f59e0b;background:#fffbeb;color:#92400e;'}cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
+            <i class="fas ${String(user.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'fa-play':'fa-pause'}" style="margin-right:6px;"></i>${String(user.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'Unsuspend':'Suspend'}
           </button>
           <button type="button" data-action="close" data-uid="${escapeHtml(user.uid)}" ${canAct ? '' : 'disabled title="Only the admin who created this account (or account owner) can perform actions on admin-generated accounts."'} style="min-height:44px;padding:8px 12px;border-radius:10px;font-weight:800;border:1px solid #7c2d12;background:#fff7ed;color:#7c2d12;cursor:pointer;${canAct?'':'opacity:0.5;cursor:not-allowed;'}">
             <i class="fas fa-door-closed" style="margin-right:6px;"></i>Close
@@ -1270,6 +1283,8 @@
         event.preventDefault();
         event.stopImmediatePropagation();
         const uid = suspendButton.getAttribute("data-uid");
+        const targetStatus = String(suspendButton.getAttribute("data-target-status") || "SUSPENDED").toUpperCase();
+        const isUnsuspend = targetStatus === "ACTIVE";
         const user = findUser(uid);
         const canAct = computeCanAct(user);
         if (suspendButton.disabled || suspendButton.hasAttribute("disabled")) {
@@ -1282,21 +1297,30 @@
           return;
         }
         if (!uid) { flash("Unable to locate account identifier.", true); return; }
-        try {
-          const r = await Swal.fire({title:'Suspend account?', text:'This user will be unable to transact.', icon:'warning', showCancelButton:true, confirmButtonText:'Suspend', cancelButtonText:'Cancel', confirmButtonColor:'#d97706'});
-          if (!r.isConfirmed) return;
-        } catch(e) {
-          if (!window.confirm("Suspend account? This user will be unable to transact.")) return;
+        let confirm = false;
+        if (typeof Swal !== 'undefined' && window.Swal && Swal.fire) {
+          const title = isUnsuspend ? 'Unsuspend (restore) account?' : 'Suspend account?';
+          const desc = isUnsuspend ? 'This user will be able to log in and transact again.' : 'This user will be unable to log in or transact.';
+          const confirmText = isUnsuspend ? 'Unsuspend' : 'Suspend';
+          const confirmColor = isUnsuspend ? '#059669' : '#d97706';
+          const ic = isUnsuspend ? 'success' : 'warning';
+          const r = await Swal.fire({title:title, text:desc, icon:ic, showCancelButton:true, confirmButtonText:confirmText, cancelButtonText:'Cancel', confirmButtonColor:confirmColor});
+          confirm = Boolean(r?.isConfirmed);
+        } else {
+          const q = isUnsuspend ? 'Unsuspend account? This user will be able to log in again.' : 'Suspend account? This user will be unable to log in or transact.';
+          if (!window.confirm(q)) return;
+          confirm = true;
         }
+        if (!confirm) return;
         suspendButton.disabled = true;
         const oldText = suspendButton.innerHTML;
-        suspendButton.textContent = "Suspending…";
+        suspendButton.textContent = isUnsuspend ? "Restoring…" : "Suspending…";
         try {
-          await api(`/api/admin/users/${encodeURIComponent(uid)}/suspend`, { method: "POST" });
-          flash("Account suspended.");
-          await loadUsers();
+          await api(`/api/admin/users/${encodeURIComponent(uid)}/suspend`, { method: "POST", body: JSON.stringify({ targetStatus }) });
+          flash(isUnsuspend ? "Account restored and reactivated." : "Account suspended.");
+          loadUserList();
         } catch (err) {
-          flash(err?.message || "Unable to suspend account.", true);
+          flash(err?.message || (isUnsuspend ? "Unable to restore account." : "Unable to suspend account."), true);
           suspendButton.disabled = false;
           suspendButton.innerHTML = oldText;
         }
