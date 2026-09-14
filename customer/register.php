@@ -491,9 +491,16 @@
                         </div>
 
                         <div class="register-right">
+                            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:28px;">
+                                <div class="d-lg-none" style="display:flex;align-items:center;gap:10px;">
+                                    <img src="../assets/images/brand/logo_VanguardDoubleTrust.svg" alt="VanguardDoubleTrust" height="34">
+                                    <div style="font-weight:800; color:var(--text-main); letter-spacing:-0.01em; font-size:15px;">VanguardDoubleTrust</div>
+                                </div>
+                                <div id="langDropdownContainer" class="vt-lang-wrap" style="flex:0 0 auto; display:flex; align-items:center; justify-content:flex-end; width:100%; max-width:220px; margin-left:auto;"></div>
+                            </div>
                             <div class="form-header">
-                                <h2>Create Your Account</h2>
-                                <p>Fill in your details to get started.</p>
+                                <h2 data-i18n="reg_heading_create">Create Your Account</h2>
+                                <p data-i18n="reg_sub_fill">Fill in the details below to register.</p>
                             </div>
 
 
@@ -676,11 +683,27 @@
     <script src="assets/libs/node-waves/waves.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <script src="assets/js/customer-i18n.js?v=20260817b"></script>
     <script src="assets/js/runtime-config.js"></script>
     <script src="firebase-config.js"></script>
     <script src="assets/js/auth-session.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
+            /* ============== LANGUAGE DROPDOWN + I18N BOOTSTRAP ============== */
+            try {
+                if (window.VT && VT.I18N && typeof VT.I18N.bootstrapLangElements === "function") {
+                    VT.I18N.bootstrapLangElements(document);
+                }
+            } catch (err) {}
+            try {
+                var mount = document.getElementById("langDropdownContainer");
+                if (mount && window.VT && VT.UI && typeof VT.UI.initLangDropdown === "function") {
+                    VT.UI.initLangDropdown(mount, {
+                        saveEndpoint: '/api/profile'
+                    });
+                }
+            } catch (err) {}
+            /* ============== END LANG ============== */
             let countrySelect = document.getElementById("country");
             let stateSelect = document.getElementById("state");
             let citySelect = document.getElementById("city");

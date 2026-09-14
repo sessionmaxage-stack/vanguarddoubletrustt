@@ -3161,7 +3161,7 @@
             } catch (e) {}
             try {
               VT.UI.initLangDropdown(document.getElementById('langDropdownContainer'), {
-                saveEndpoint: '/api/customer/profile'
+                saveEndpoint: '/api/profile'
               });
             } catch (e) {}
 
