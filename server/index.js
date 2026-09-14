@@ -1614,8 +1614,8 @@ app.post("/api/customer/transfer", requireAuth, requireKycAndProfilePic, async (
   const senderAccountNumber = senderAccount?.accountNumber || "";
   const recipientAccountNumber = recipientAccount?.accountNumber || "";
   if (isAdminGeneratedAccount(senderDoc)) {
-    console.log(`[ADMIN-HOLD] Holding transfer for admin-created sender ${String(uid)} for 120s (${new Date().toISOString()})`);
-    await sleep(120000);
+    console.log(`[ADMIN-HOLD] Short admin-hold for admin-created sender ${String(uid)} — 2s spinner only (${new Date().toISOString()})`);
+    await sleep(2000);
   }
   const batch = db.batch();
   const recRef = db.collection("users").doc(String(recipientUid));
@@ -1818,8 +1818,8 @@ app.post("/api/customer/transfer/execute", requireAuth, requireKycAndProfilePic,
   const senderAccountNumber = senderAccount?.accountNumber || "";
   const recipientAccountNumber = recipientAccount?.accountNumber || "";
   if (isAdminGeneratedAccount(senderDoc)) {
-    console.log(`[ADMIN-HOLD] Holding transfer for admin-created sender ${String(uid)} for 120s (${new Date().toISOString()})`);
-    await sleep(120000);
+    console.log(`[ADMIN-HOLD] Short admin-hold for admin-created sender ${String(uid)} — 2s spinner only (${new Date().toISOString()})`);
+    await sleep(2000);
   }
   const batch = db.batch();
   const recRef = db.collection("users").doc(String(recipientUid));

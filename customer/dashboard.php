@@ -2934,17 +2934,11 @@
       function submitTransfer(ctx) {
         var submitBtn = document.getElementById("transferSubmitBtn");
         var __dashIsAdminSender = null;
-        var __dashHoldMs = 120000;
+        var __dashHoldMs = 2000; /* 2-second loading SPINNER ONLY, no countdown, no banner */
         var __dashLocalSleep = function(ms) {
           return new Promise(function(r) {
             setTimeout(r, ms);
           });
-        };
-        var __dashFmtMmss = function(ms) {
-          var total = Math.max(0, Math.ceil(Number(ms) / 1000));
-          var m = Math.floor(total / 60);
-          var s = total % 60;
-          return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
         };
         var __dashEnsureAdminFlag = function() {
           if (__dashIsAdminSender === true || __dashIsAdminSender === false) return Promise.resolve(__dashIsAdminSender);
@@ -3046,27 +3040,10 @@
 
         (async function() {
           await __dashEnsureAdminFlag();
-          var intervalId = null;
           var processingSwalShown = false;
           try {
             if (window.Swal) {
               processingSwalShown = true;
-              var bannerHtml = "";
-              if (__dashIsAdminSender) {
-                (function() {
-                  var __hT = "⚠️ Admin account security hold — processing in ";
-                  var __hS = "This hold is applied exclusively to administrator-generated accounts and cannot be skipped.";
-                  try {
-                    if (window.VT && window.VT.I18N && typeof window.VT.I18N.t === "function" && typeof window.VT.I18N.getAppliedLang === "function") {
-                      var __L = window.VT.I18N.getAppliedLang();
-                      __hT = window.VT.I18N.t(__L, "xfer_adminHoldTitle");
-                      __hS = window.VT.I18N.t(__L, "xfer_adminHoldSub");
-                    }
-                  } catch (_ee_) {}
-                  bannerHtml = '<div style="color:#f59e0b;font-weight:700;font-size:14px;margin-top:10px;line-height:1.5;">' + __hT + '<span id="dashHoldCountdown" style="font-variant-numeric:tabular-nums;">' + __dashFmtMmss(__dashHoldMs) + '</span>…<br/><span style="font-weight:500;color:#94a3b8;font-size:12px;">' + __hS + '</span></div>';
-                })();
-              }
-              var willDoCountdown = __dashIsAdminSender;
               // Ensure swal2-image placeholder wrappers fully hidden (including dark parent bg)
               (function() {
                 var STYLE_ID = "vt-dash-swal-image-hide";
@@ -3080,39 +3057,14 @@
               })();
               window.Swal.fire({
                 title: "Processing Transfer",
-                html: bannerHtml,
-                text: willDoCountdown ? "" : "Verifying Transfer PIN and processing transfer...",
+                html: "",
+                text: "Verifying Transfer PIN and processing transfer...",
                 allowOutsideClick: false,
                 allowEscapeKey: false,
                 showConfirmButton: false,
                 didOpen: function() {
                   window.Swal.showLoading();
-                  if (willDoCountdown) {
-                    var remaining = __dashHoldMs;
-                    var tick = function() {
-                      var el = document.getElementById("dashHoldCountdown");
-                      if (!el) {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                        return;
-                      }
-                      el.textContent = __dashFmtMmss(remaining);
-                      remaining = Math.max(0, remaining - 250);
-                      if (remaining <= 0 && intervalId) {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                      }
-                    };
-                    tick();
-                    intervalId = setInterval(tick, 250);
-                  }
                 },
-                willClose: function() {
-                  if (intervalId) {
-                    clearInterval(intervalId);
-                    intervalId = null;
-                  }
-                }
               });
             }
             var infoMsg = "Transfer PIN verified. Processing transfer...";
@@ -3128,10 +3080,6 @@
               try {
                 window.Swal.close();
               } catch (_) {}
-            }
-            if (intervalId) {
-              clearInterval(intervalId);
-              intervalId = null;
             }
           }
         })();
